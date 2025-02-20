@@ -82,7 +82,7 @@ export default function Component() {
           className="mb-12 myfont2 max-w-2xl text-lg text-gray-400 md:text-xl"
         >
           Engage in epic quiz battles with your friends in real-time. Test your
-          knowledge, climb the leaderboard, and prove you're the ultimate quiz
+          knowledge, climb the leaderboard, and prove you&apos;re the ultimate quiz
           champion in this friendly competition platform.
         </motion.p>
 

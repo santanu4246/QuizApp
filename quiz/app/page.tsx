@@ -1,4 +1,4 @@
-import Image from "next/image";
+
 import HeroSection from "./components/landing-page/hero-section";
 import GlowDashboardCard from "./components/landing-page/feature-section";
 import GlowingGridBackground from "./components/ui/grid-bg";

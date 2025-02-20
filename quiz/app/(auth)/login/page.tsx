@@ -3,8 +3,9 @@
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle } from "lucide-react";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
 
@@ -84,16 +85,14 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-
-      {/* Footer */}
-      {/* <div className="mt-8 text-center">
-        <p className="text-sm text-zinc-500">
-          Don't have an account?{" "}
-          <a href="#" className="text-emerald-500 hover:text-emerald-400 font-medium">
-            Create one for free
-          </a>
-        </p>
-      </div> */}
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
