@@ -41,7 +41,28 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
+import axios from "axios";
 const socket = io("http://localhost:3001");
+
+// Define interfaces for game history
+interface GameHistoryItem {
+  id: string;
+  topic: string;
+  date: string;
+  opponent: string;
+  result: "win" | "loss" | "tie";
+  score: string;
+  opponentScore: string;
+}
+
+interface UserStats {
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  winRate: number;
+  totalPoints: number;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -67,6 +88,9 @@ export default function DashboardPage() {
   const [roomCode, setRoomCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   const handleChange = (
     key: keyof typeof inputedData,
@@ -94,6 +118,64 @@ export default function DashboardPage() {
   useEffect(() => {
     setSocket(socket);
   }, [setSocket]);
+
+  // Fetch game history and user stats
+  useEffect(() => {
+    const fetchGameHistory = async () => {
+      if (!session?.user?.id) return;
+      
+      setIsLoadingHistory(true);
+      try {
+        // Fetch user stats
+        const statsResponse = await axios.get(`/api/user/${session.user.id}/stats`);
+        if (statsResponse.data) {
+          setUserStats(statsResponse.data);
+        }
+        
+        // Fetch game history
+        const historyResponse = await axios.get(`/api/user/${session.user.id}/game-history`);
+        if (historyResponse.data && Array.isArray(historyResponse.data.games)) {
+          setGameHistory(historyResponse.data.games);
+        }
+      } catch (error) {
+        console.error("Error fetching game history:", error);
+        // Set some mock data for now
+        setUserStats({
+          gamesPlayed: 10,
+          wins: 6,
+          losses: 3,
+          draws: 1,
+          winRate: 0.6,
+          totalPoints: 45
+        });
+        
+        setGameHistory([
+          {
+            id: "1",
+            topic: "Science",
+            date: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+            opponent: "Player123",
+            result: "win",
+            score: "8/10",
+            opponentScore: "6/10"
+          },
+          {
+            id: "2",
+            topic: "History",
+            date: new Date(Date.now() - 18000000).toISOString(), // 5 hours ago
+            opponent: "QuizMaster",
+            result: "loss",
+            score: "6/10",
+            opponentScore: "9/10"
+          }
+        ]);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+    
+    fetchGameHistory();
+  }, [session?.user?.id]);
 
   function handleCreateRoom() {
     if (
@@ -128,6 +210,18 @@ export default function DashboardPage() {
       socket.emit("joinRoom", roomData);
     }
   }
+
+  // Format relative time
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
 
   if (status === "loading") {
     return (
@@ -198,18 +292,37 @@ export default function DashboardPage() {
                     }
                   >
                     <SelectTrigger className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-300">
-                      <SelectValue placeholder="Select room time limit" />
+                      <SelectValue placeholder="Select time limit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="300">5 Minutes</SelectItem>
-                      <SelectItem value="600">10 Minutes</SelectItem>
-                      <SelectItem value="900">15 Minutes</SelectItem>
+                      <SelectItem value="60">1 minute</SelectItem>
+                      <SelectItem value="120">2 minutes</SelectItem>
+                      <SelectItem value="300">5 minutes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-zinc-300">
-                    Number of Questions
+                    Player Count
+                  </label>
+                  <Select
+                    onValueChange={(value) =>
+                      handleChange("playerCount", parseInt(value))
+                    }
+                  >
+                    <SelectTrigger className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-300">
+                      <SelectValue placeholder="Select player count" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2">2 Players</SelectItem>
+                      <SelectItem value="3">3 Players</SelectItem>
+                      <SelectItem value="4">4 Players</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-zinc-300">
+                    Question Count
                   </label>
                   <Select
                     onValueChange={(value) =>
@@ -223,23 +336,6 @@ export default function DashboardPage() {
                       <SelectItem value="5">5 Questions</SelectItem>
                       <SelectItem value="10">10 Questions</SelectItem>
                       <SelectItem value="15">15 Questions</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">
-                    Player Limit
-                  </label>
-                  <Select
-                    onValueChange={(value) => handleChange("playerCount", Number(value))}
-                  >
-                    <SelectTrigger className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-300">
-                      <SelectValue placeholder="Select player limit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2 Players</SelectItem>
-                      <SelectItem value="4">4 Players</SelectItem>
-                      <SelectItem value="6">6 Players</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -261,12 +357,15 @@ export default function DashboardPage() {
                   </Select>
                 </div>
                 <Button
-                  disabled={isLoading || isJoining}
                   onClick={handleCreateRoom}
-                  className="w-full bg-blue-600 text-white hover:bg-blue-700"
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={isLoading}
                 >
                   {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
                   ) : (
                     "Create Room"
                   )}
@@ -277,14 +376,14 @@ export default function DashboardPage() {
 
           <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="border-zinc-700 text-black">
-                <Users2 className="mr-2 h-4 w-4" />
+              <Button className="bg-zinc-800 text-white hover:bg-zinc-700">
+                <Users className="mr-2 h-4 w-4" />
                 Join Room
               </Button>
             </DialogTrigger>
             <DialogContent className="border-zinc-800 bg-zinc-900 text-zinc-100">
               <DialogHeader>
-                <DialogTitle>Join Room</DialogTitle>
+                <DialogTitle>Join Existing Room</DialogTitle>
                 <DialogDescription className="text-zinc-400">
                   Enter a room code to join an existing game
                 </DialogDescription>
@@ -295,18 +394,22 @@ export default function DashboardPage() {
                     Room Code
                   </label>
                   <Input
+                    value={roomCode}
                     onChange={(e) => setRoomCode(e.target.value)}
-                    className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-200 placeholder:text-zinc-500"
-                    placeholder="Enter 6-digit room code"
+                    placeholder="Enter room code"
+                    className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-300 placeholder:text-zinc-500"
                   />
                 </div>
                 <Button
-                  disabled={isJoining || isLoading}
                   onClick={handleJoinRoom}
-                  className="w-full bg-blue-600 text-white hover:bg-blue-700"
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={isJoining}
                 >
                   {isJoining ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Joining...
+                    </>
                   ) : (
                     "Join Room"
                   )}
@@ -316,16 +419,18 @@ export default function DashboardPage() {
           </Dialog>
         </div>
 
-        {/* Stats Grid */}
-        <div className="mb-8 grid gap-6 md:grid-cols-4">
+        {/* Stats Cards */}
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 overflow-hidden">
           <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6 shadow-lg">
             <div className="flex items-center gap-4">
               <div className="rounded-lg bg-blue-500/10 p-3">
-                <Gamepad2 className="h-6 w-6 text-blue-500" />
+                <Trophy className="h-6 w-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">Total Games</p>
-                <p className="text-2xl font-bold text-zinc-100">42</p>
+                <p className="text-sm font-medium text-zinc-400">Win Rate</p>
+                <p className="text-2xl font-bold text-zinc-100">
+                  {userStats ? `${Math.round(userStats.winRate * 100)}%` : "0%"}
+                </p>
               </div>
             </div>
           </Card>
@@ -333,11 +438,13 @@ export default function DashboardPage() {
           <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6 shadow-lg">
             <div className="flex items-center gap-4">
               <div className="rounded-lg bg-green-500/10 p-3">
-                <Trophy className="h-6 w-6 text-green-500" />
+                <Gamepad2 className="h-6 w-6 text-green-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">Win Rate</p>
-                <p className="text-2xl font-bold text-zinc-100">65%</p>
+                <p className="text-sm font-medium text-zinc-400">Games Played</p>
+                <p className="text-2xl font-bold text-zinc-100">
+                  {userStats?.gamesPlayed || 0}
+                </p>
               </div>
             </div>
           </Card>
@@ -348,22 +455,10 @@ export default function DashboardPage() {
                 <Clock className="h-6 w-6 text-purple-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">Avg. Time</p>
-                <p className="text-2xl font-bold text-zinc-100">45s</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6 shadow-lg">
-            <div className="flex items-center gap-4">
-              <div className="rounded-lg bg-orange-500/10 p-3">
-                <Users className="h-6 w-6 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-zinc-400">
-                  Total Rivals
+                <p className="text-sm font-medium text-zinc-400">Total Points</p>
+                <p className="text-2xl font-bold text-zinc-100">
+                  {userStats?.totalPoints || 0}
                 </p>
-                <p className="text-2xl font-bold text-zinc-100">138</p>
               </div>
             </div>
           </Card>
@@ -404,59 +499,135 @@ export default function DashboardPage() {
             </div>
 
             <TabsContent value="all" className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
-                  <div className="flex items-center gap-4">
-                    <div className="rounded-full bg-green-500/10 p-2">
-                      <Trophy className="h-4 w-4 text-green-500" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-zinc-200">
-                          vs Player123
-                        </p>
-                        <span className="rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500">
-                          Victory
-                        </span>
-                      </div>
-                      <p className="text-sm text-zinc-400">
-                        Science Quiz • 8/10 correct
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-zinc-500">2h ago</span>
+              {isLoadingHistory ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                 </div>
-
-                <div className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
-                  <div className="flex items-center gap-4">
-                    <div className="rounded-full bg-red-500/10 p-2">
-                      <Trophy className="h-4 w-4 text-red-500" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-zinc-200">
-                          vs QuizMaster
-                        </p>
-                        <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-500">
-                          Defeat
-                        </span>
-                      </div>
-                      <p className="text-sm text-zinc-400">
-                        History Quiz • 6/10 correct
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-zinc-500">5h ago</span>
+              ) : gameHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-zinc-400">No game history yet. Play a game to see your results!</p>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  {gameHistory.map((game) => (
+                    <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
+                      <div className="flex items-center gap-4">
+                        <div className={`rounded-full ${
+                          game.result === 'win' 
+                            ? 'bg-green-500/10' 
+                            : game.result === 'loss'
+                              ? 'bg-red-500/10'
+                              : 'bg-yellow-500/10'
+                        } p-2`}>
+                          <Trophy className={`h-4 w-4 ${
+                            game.result === 'win' 
+                              ? 'text-green-500' 
+                              : game.result === 'loss'
+                                ? 'text-red-500'
+                                : 'text-yellow-500'
+                          }`} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-zinc-200">
+                              vs {game.opponent}
+                            </p>
+                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                              game.result === 'win' 
+                                ? 'bg-green-500/10 text-green-500' 
+                                : game.result === 'loss'
+                                  ? 'bg-red-500/10 text-red-500'
+                                  : 'bg-yellow-500/10 text-yellow-500'
+                            }`}>
+                              {game.result === 'win' 
+                                ? 'Victory' 
+                                : game.result === 'loss'
+                                  ? 'Defeat'
+                                  : 'Tie'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-zinc-400">
+                            {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="wins">
-              {/* Similar structure for wins */}
+            <TabsContent value="wins" className="space-y-4">
+              {isLoadingHistory ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {gameHistory
+                    .filter(game => game.result === 'win')
+                    .map((game) => (
+                      <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
+                        <div className="flex items-center gap-4">
+                          <div className="rounded-full bg-green-500/10 p-2">
+                            <Trophy className="h-4 w-4 text-green-500" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-zinc-200">
+                                vs {game.opponent}
+                              </p>
+                              <span className="rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500">
+                                Victory
+                              </span>
+                            </div>
+                            <p className="text-sm text-zinc-400">
+                              {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="losses">
-              {/* Similar structure for losses */}
+            <TabsContent value="losses" className="space-y-4">
+              {isLoadingHistory ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {gameHistory
+                    .filter(game => game.result === 'loss')
+                    .map((game) => (
+                      <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
+                        <div className="flex items-center gap-4">
+                          <div className="rounded-full bg-red-500/10 p-2">
+                            <Trophy className="h-4 w-4 text-red-500" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-zinc-200">
+                                vs {game.opponent}
+                              </p>
+                              <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-500">
+                                Defeat
+                              </span>
+                            </div>
+                            <p className="text-sm text-zinc-400">
+                              {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </Card>

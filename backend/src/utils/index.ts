@@ -23,6 +23,7 @@ export async function createRoomData(roomId: string, roomData: RoomType) {
     throw error;
   }
 }
+
 export async function joinRoom(roomId: string, user: string) {
   try {
     const response = await axios.post(
@@ -35,5 +36,20 @@ export async function joinRoom(roomId: string, user: string) {
     console.log(response.data);
   } catch (error) {
     console.log(error);
+  }
+}
+
+export async function storeQuizResults(roomId: string, results: any) {
+  try {
+    const response = await axios.post(
+      `http://localhost:3000/api/room/${roomId}/results`,
+      {
+        results,
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error storing quiz results:", error);
+    throw error;
   }
 }
