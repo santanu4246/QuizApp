@@ -1,23 +1,43 @@
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+// Validate and transform incoming question data
+interface QuestionData {
+  id?: string;
+  questionText: string;
+  options: string[];
+  correctOption: number;
+  timeLimit?: number;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const { roomId } = params;
+    // Extract room ID from params
+    const { roomId } = await params;
+
+    // Parse request body
     const body = await req.json();
     const { questions } = body;
 
-    if (!roomId || !questions || !Array.isArray(questions)) {
+    // Validate input
+    if (!roomId) {
       return NextResponse.json(
-        { error: "Room ID and questions array are required" },
+        { error: "Room ID is required" },
         { status: 400 }
       );
     }
 
-    // Get the room to check if it exists
+    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+      return NextResponse.json(
+        { error: "Questions must be a non-empty array" },
+        { status: 400 }
+      );
+    }
+
+    // Find the room
     const room = await prisma.room.findUnique({
       where: { id: roomId },
     });
@@ -29,7 +49,7 @@ export async function POST(
       );
     }
 
-    // Get or create a default quiz category
+    // Get or create quiz category
     let category = await prisma.quizCategory.findFirst({
       where: { name: room.quizTopic || "General Knowledge" },
     });
@@ -44,25 +64,31 @@ export async function POST(
       });
     }
 
-    // Store each question in the database
-    const storedQuestions = [];
+    // Validate and store questions
+    const storedQuestions: any[] = [];
     for (const q of questions) {
+      // Validate question structure
+      if (!isValidQuestion(q)) {
+        console.warn('Skipping invalid question:', q);
+        continue;
+      }
+
       // Check if question already exists
-      let question = await prisma.question.findFirst({
+      let existingQuestion = await prisma.question.findFirst({
         where: {
           questionText: q.questionText,
           categoryId: category.id,
         },
       });
 
-      if (!question) {
-        // Create the question if it doesn't exist
-        question = await prisma.question.create({
+      // Create question if it doesn't exist
+      if (!existingQuestion) {
+        existingQuestion = await prisma.question.create({
           data: {
             questionText: q.questionText,
             options: q.options,
             correctOption: q.correctOption,
-            difficulty: room.difficulty,
+            difficulty: room.difficulty || 'MEDIUM',
             points: 10,
             categoryId: category.id,
           },
@@ -70,12 +96,12 @@ export async function POST(
       }
 
       // Create game question
-      const gameQuestion: { id: string } = await prisma.gameQuestion.create({
+      const gameQuestion = await prisma.gameQuestion.create({
         data: {
-          gameSessionId: roomId, // Using roomId as gameSessionId
-          questionId: question.id,
+          gameSessionId: roomId,
+          questionId: existingQuestion.id,
           orderIndex: storedQuestions.length,
-          timeLimit: q.timeLimit,
+          timeLimit: q.timeLimit || 15,
           points: 10,
         },
       });
@@ -93,13 +119,74 @@ export async function POST(
 
     return NextResponse.json({
       message: "Questions stored successfully",
+      questionsStored: storedQuestions.length,
       questions: storedQuestions,
     });
   } catch (error) {
-    console.error("Error storing questions:", error);
+    // Comprehensive error logging
+    console.error("Error storing questions:", {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : null,
+      // Prisma-specific error details
+      ...(error instanceof Error && 'code' in error ? {
+        prismaCode: (error as any).code,
+        prismaMetadata: (error as any).meta
+      } : {})
+    });
+
+    // Return a detailed error response
     return NextResponse.json(
-      { error: "Failed to store questions" },
+      {
+        error: "Failed to store questions",
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }
-} 
+}
+
+// Helper function to validate question data
+function isValidQuestion(question: any): question is QuestionData {
+  return (
+    question &&
+    typeof question.questionText === 'string' &&
+    Array.isArray(question.options) &&
+    question.options.length > 0 &&
+    typeof question.correctOption === 'number' &&
+    question.correctOption >= 0 &&
+    question.correctOption < question.options.length
+  );
+}
+
+// Optional: Additional route handlers
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { roomId: string } }
+) {
+  try {
+    const roomId = params.roomId;
+
+    // Fetch questions for a specific room
+    const gameQuestions = await prisma.gameQuestion.findMany({
+      where: { gameSessionId: roomId },
+      include: {
+        question: true,
+      },
+      orderBy: { orderIndex: 'asc' },
+    });
+
+    return NextResponse.json({
+      message: "Questions retrieved successfully",
+      questions: gameQuestions,
+    });
+  } catch (error) {
+    console.error("Error retrieving questions:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to retrieve questions",
+        details: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    );
+  }
+}

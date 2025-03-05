@@ -1,15 +1,16 @@
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function PATCH(
+export async function PUT(
   req: NextRequest,
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const { roomId } = params;
+    const { roomId } = await params;
     const body = await req.json();
     const { status } = body;
-
+    console.log(status,roomId);
+    
     if (!roomId || !status) {
       return NextResponse.json(
         { error: "Room ID and status are required" },

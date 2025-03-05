@@ -6,9 +6,10 @@ export async function POST(
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const { roomId } = params;
+    const { roomId } = await params;
     const body = await req.json();
     const { questionIndex, answers } = body;
+    console.log("answers", roomId, questionIndex, answers);
 
     if (!roomId || questionIndex === undefined || !answers || !Array.isArray(answers)) {
       return NextResponse.json(

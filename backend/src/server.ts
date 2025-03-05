@@ -88,14 +88,14 @@ io.on("connection", (socket) => {
   // New event to request quiz questions directly
   socket.on("requestQuizQuestions", (roomId) => {
     console.log(`Player ${socket.id} requesting quiz questions for room ${roomId}`);
-    
+
     if (activeQuizzes[roomId]) {
       console.log(`Sending quiz questions to player ${socket.id}`);
       const currentState = roomTimers[roomId];
       const timeElapsed = Date.now() - currentState.startTime;
       const timeLeft = Math.max(0, demoQuestions[currentState.currentQuestionIndex].timeLimit * 1000 - timeElapsed);
-      
-      socket.emit("quizStart", { 
+
+      socket.emit("quizStart", {
         questions: activeQuizzes[roomId],
         currentQuestionIndex: currentState.currentQuestionIndex,
         timeLeft: Math.ceil(timeLeft / 1000)
@@ -161,10 +161,10 @@ io.on("connection", (socket) => {
         // If room is full, update status to ACTIVE
         rooms[roomCode].status = "ACTIVE";
         io.in(roomCode).emit("updatePlayers", rooms[roomCode]);
-        
+
         // Notify all clients that game has started
         io.in(roomCode).emit("gameStart");
-        
+
         // Start the quiz with a delay to ensure all clients have received the gameStart event
         setTimeout(() => {
           startQuiz(roomCode);
@@ -172,7 +172,7 @@ io.on("connection", (socket) => {
       } else if (rooms[roomCode].status === "ACTIVE" && activeQuizzes[roomCode]) {
         // If game already started, send game start event to the new player
         socket.emit("gameStart");
-        
+
         // Send quiz questions to the new player
         setTimeout(() => {
           socket.emit("quizStart", { questions: activeQuizzes[roomCode] });
@@ -185,31 +185,32 @@ io.on("connection", (socket) => {
 
   // Handle answer submission
   socket.on("submitAnswer", ({ roomId, questionIndex, selectedOption }) => {
+
     if (!quizResults[roomId]) {
       quizResults[roomId] = {};
     }
-    
+    storeQuestionAnswers(roomId, questionIndex, selectedOption)
     if (!quizResults[roomId][socket.id]) {
       quizResults[roomId][socket.id] = {
         score: 0,
         answers: []
       };
     }
-    
+
     // Store the answer
     quizResults[roomId][socket.id].answers[questionIndex] = selectedOption;
-    
+
     // Check if answer is correct
     if (selectedOption === demoQuestions[questionIndex].correctOption) {
       quizResults[roomId][socket.id].score += 1;
     }
-    
+
     // Check if all participants have answered this question
     const room = rooms[roomId];
-    const allAnswered = room.participants.every(participant => {
+    const allAnswered = room.participants?.every(participant => {
       return quizResults[roomId][participant.id]?.answers[questionIndex] !== undefined;
     });
-    
+
     // If all participants have answered, move to next question immediately
     if (allAnswered) {
       clearQuestionTimer(roomId);
@@ -242,15 +243,15 @@ io.on("connection", (socket) => {
 // Function to start the quiz
 function startQuiz(roomId: string) {
   if (!rooms[roomId]) return;
-  
+
   console.log(`Starting quiz for room ${roomId}`);
-  
+  updateRoomStatus(roomId, "IN_GAME")
   // Initialize quiz results for this room
   quizResults[roomId] = {};
-  
+
   // Select questions based on room settings
   const questions = demoQuestions.slice(0, rooms[roomId].questionCount || 5);
-  
+
   // Send questions without correct answers
   const clientQuestions = questions.map(q => ({
     id: q.id,
@@ -258,40 +259,51 @@ function startQuiz(roomId: string) {
     options: q.options,
     timeLimit: q.timeLimit
   }));
-  
+
   // Store the questions for this quiz
   activeQuizzes[roomId] = clientQuestions;
-  
-  // Initialize room timer state
-  roomTimers[roomId] = {
-    currentQuestionIndex: 0,
-    timer: null,
-    startTime: Date.now()
-  };
-  
-  // Start the first question timer
-  startQuestionTimer(roomId);
-  
-  // Send to all clients in the room
-  console.log(`Sending quiz questions to all players in room ${roomId}`);
-  io.in(roomId).emit("quizStart", { 
-    questions: clientQuestions,
-    currentQuestionIndex: 0,
-    timeLeft: questions[0].timeLimit
-  });
+
+  // Notify all clients to prepare for quiz start
+  io.in(roomId).emit("quizPrepare");
+
+  // Add a delay to ensure all clients are ready
+  setTimeout(() => {
+    // Initialize room timer state with a future start time
+    const startDelay = 3000; // 3 seconds delay
+    const startTime = Date.now() + startDelay;
+
+    roomTimers[roomId] = {
+      currentQuestionIndex: 0,
+      timer: null,
+      startTime: startTime
+    };
+
+    // Send quiz start signal with synchronized start time
+    io.in(roomId).emit("quizStart", {
+      questions: clientQuestions,
+      currentQuestionIndex: 0,
+      timeLeft: questions[0].timeLimit,
+      startTime: startTime
+    });
+    storeQuizQuestions(roomId, clientQuestions)
+    // Start the first question timer after the delay
+    setTimeout(() => {
+      startQuestionTimer(roomId);
+    }, startDelay);
+  }, 1000); // 1 second preparation time
 }
 
 // Function to start timer for current question
 function startQuestionTimer(roomId: string) {
   const currentState = roomTimers[roomId];
   const currentQuestion = demoQuestions[currentState.currentQuestionIndex];
-  
+
   // Clear any existing timer
   clearQuestionTimer(roomId);
-  
+
   // Set start time
   currentState.startTime = Date.now();
-  
+
   // Start new timer
   currentState.timer = setTimeout(() => {
     handleQuestionEnd(roomId, currentState.currentQuestionIndex);
@@ -326,6 +338,7 @@ function handleQuestionEnd(roomId: string, questionIndex: number) {
 
   // Check if this was the last question
   if (questionIndex === demoQuestions.length - 1) {
+    updateRoomStatus(roomId, "FINISHED")
     // Send final results
     io.in(roomId).emit("quizResults", {
       participants: room.participants.map(participant => ({
@@ -334,7 +347,7 @@ function handleQuestionEnd(roomId: string, questionIndex: number) {
         score: quizResults[roomId][participant.id]?.score || 0
       }))
     });
-    
+
     // Clean up room timers
     delete roomTimers[roomId];
   } else {
@@ -343,7 +356,7 @@ function handleQuestionEnd(roomId: string, questionIndex: number) {
       const nextIndex = questionIndex + 1;
       roomTimers[roomId].currentQuestionIndex = nextIndex;
       startQuestionTimer(roomId);
-      
+
       // Notify all clients to move to next question
       io.in(roomId).emit("nextQuestion", {
         questionIndex: nextIndex,
@@ -355,9 +368,15 @@ function handleQuestionEnd(roomId: string, questionIndex: number) {
 
 // Function to update room status in database
 async function updateRoomStatus(roomId: string, status: string) {
+  console.log("update", roomId, status);
+
   try {
-    await axios.patch(`http://localhost:3000/api/room/${roomId}/status`, {
+    await axios.put(`http://localhost:3000/api/room/${roomId}/status`, {
       status
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
   } catch (error) {
     console.error("Error updating room status:", error);
@@ -366,12 +385,38 @@ async function updateRoomStatus(roomId: string, status: string) {
 
 // Function to store quiz questions in database
 async function storeQuizQuestions(roomId: string, questions: any[]) {
+  console.log('Room ID:', roomId);
+  console.log('Questions to store:', questions);
+
   try {
-    await axios.post(`http://localhost:3000/api/room/${roomId}/questions`, {
+    const response = await axios.post(`http://localhost:3000/api/room/${roomId}/questions`, {
       questions
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
+
+    // Log full response details
+    console.log('Response status:', response.status);
+    console.log('Response data:', response.data);
+
+    return response.data;
   } catch (error) {
-    console.error("Error storing quiz questions:", error);
+    // More detailed error logging
+    if (axios.isAxiosError(error)) {
+      console.error('Axios Error Details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
+    } else {
+      console.error('Unexpected Error:', error);
+    }
+
+    // Rethrow or handle as needed
+    throw error;
   }
 }
 

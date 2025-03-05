@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     // Get the user's game history from completed rooms
     const rooms = await prisma.room.findMany({
