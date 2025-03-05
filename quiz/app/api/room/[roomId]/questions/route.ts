@@ -70,7 +70,7 @@ export async function POST(
       }
 
       // Create game question
-      const gameQuestion = await prisma.gameQuestion.create({
+      const gameQuestion: { id: string } = await prisma.gameQuestion.create({
         data: {
           gameSessionId: roomId, // Using roomId as gameSessionId
           questionId: question.id,

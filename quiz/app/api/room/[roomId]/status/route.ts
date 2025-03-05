@@ -21,9 +21,9 @@ export async function PATCH(
     const updatedRoom = await prisma.room.update({
       where: { id: roomId },
       data: {
-        status: status as "WAITING" | "ACTIVE" | "COMPLETED" | "CANCELLED",
-        ...(status === "ACTIVE" ? { startTime: new Date() } : {}),
-        ...(status === "COMPLETED" ? { 
+        status: status as "WAITING" | "FULL" | "IN_GAME" | "FINISHED",
+        ...(status === "IN_GAME" ? { startTime: new Date() } : {}),
+        ...(status === "FINISHED" ? { 
           endTime: new Date(),
           duration: Math.floor((new Date().getTime() - (await prisma.room.findUnique({ where: { id: roomId } }))!.startTime.getTime()) / 1000)
         } : {})
