@@ -42,6 +42,7 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import axios from "axios";
+import { GameHistoryCard } from "../components/GameHistoryCard";
 const socket = io("http://localhost:3001");
 
 // Define interfaces for game history
@@ -126,49 +127,48 @@ export default function DashboardPage() {
       
       setIsLoadingHistory(true);
       try {
-        // Fetch user stats
-        const statsResponse = await axios.get(`/api/user/${session.user.id}/stats`);
+        // Fetch user stats - add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const statsResponse = await axios.get(`/api/user/${session.user.id}/stats?t=${timestamp}`);
+        
         if (statsResponse.data) {
+          console.log("User stats received:", statsResponse.data);
           setUserStats(statsResponse.data);
+        } else {
+          console.warn("No user stats data received from API");
+          // Fallback stats if API doesn't return data
+          setUserStats({
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winRate: 0,
+            totalPoints: 0
+          });
         }
         
-        // Fetch game history
-        const historyResponse = await axios.get(`/api/user/${session.user.id}/game-history`);
+        // Fetch game history - add timestamp to prevent caching
+        const historyResponse = await axios.get(`/api/user/${session.user.id}/game-history?t=${timestamp}`);
         if (historyResponse.data && Array.isArray(historyResponse.data.games)) {
+          console.log(`Received ${historyResponse.data.games.length} game history records`);
           setGameHistory(historyResponse.data.games);
+        } else {
+          console.warn("No game history data received from API");
+          setGameHistory([]);
         }
       } catch (error) {
-        console.error("Error fetching game history:", error);
-        // Set some mock data for now
+        console.error("Error fetching user data:", error);
+        // Set default empty stats
         setUserStats({
-          gamesPlayed: 10,
-          wins: 6,
-          losses: 3,
-          draws: 1,
-          winRate: 0.6,
-          totalPoints: 45
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          winRate: 0,
+          totalPoints: 0
         });
         
-        setGameHistory([
-          {
-            id: "1",
-            topic: "Science",
-            date: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-            opponent: "Player123",
-            result: "win",
-            score: "8/10",
-            opponentScore: "6/10"
-          },
-          {
-            id: "2",
-            topic: "History",
-            date: new Date(Date.now() - 18000000).toISOString(), // 5 hours ago
-            opponent: "QuizMaster",
-            result: "loss",
-            score: "6/10",
-            opponentScore: "9/10"
-          }
-        ]);
+        setGameHistory([]);
       } finally {
         setIsLoadingHistory(false);
       }
@@ -420,7 +420,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 overflow-hidden">
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4 overflow-hidden">
           <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6 shadow-lg">
             <div className="flex items-center gap-4">
               <div className="rounded-lg bg-blue-500/10 p-3">
@@ -429,7 +429,9 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium text-zinc-400">Win Rate</p>
                 <p className="text-2xl font-bold text-zinc-100">
-                  {userStats ? `${Math.round(userStats.winRate * 100)}%` : "0%"}
+                  {userStats && userStats.gamesPlayed > 0 
+                    ? `${Math.round((userStats.winRate || 0) * 100)}%` 
+                    : "0%"}
                 </p>
               </div>
             </div>
@@ -458,6 +460,20 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium text-zinc-400">Total Points</p>
                 <p className="text-2xl font-bold text-zinc-100">
                   {userStats?.totalPoints || 0}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6 shadow-lg">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-amber-500/10 p-3">
+                <Users2 className="h-6 w-6 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-400">W/L/D Record</p>
+                <p className="text-2xl font-bold text-zinc-100">
+                  {userStats ? `${userStats.wins}/${userStats.losses}/${userStats.draws}` : "0/0/0"}
                 </p>
               </div>
             </div>
@@ -510,49 +526,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {gameHistory.map((game) => (
-                    <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
-                      <div className="flex items-center gap-4">
-                        <div className={`rounded-full ${
-                          game.result === 'win' 
-                            ? 'bg-green-500/10' 
-                            : game.result === 'loss'
-                              ? 'bg-red-500/10'
-                              : 'bg-yellow-500/10'
-                        } p-2`}>
-                          <Trophy className={`h-4 w-4 ${
-                            game.result === 'win' 
-                              ? 'text-green-500' 
-                              : game.result === 'loss'
-                                ? 'text-red-500'
-                                : 'text-yellow-500'
-                          }`} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-zinc-200">
-                              vs {game.opponent}
-                            </p>
-                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                              game.result === 'win' 
-                                ? 'bg-green-500/10 text-green-500' 
-                                : game.result === 'loss'
-                                  ? 'bg-red-500/10 text-red-500'
-                                  : 'bg-yellow-500/10 text-yellow-500'
-                            }`}>
-                              {game.result === 'win' 
-                                ? 'Victory' 
-                                : game.result === 'loss'
-                                  ? 'Defeat'
-                                  : 'Tie'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-zinc-400">
-                            {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
-                    </div>
+                    <GameHistoryCard key={game.id} game={game} />
                   ))}
                 </div>
               )}
@@ -568,27 +542,7 @@ export default function DashboardPage() {
                   {gameHistory
                     .filter(game => game.result === 'win')
                     .map((game) => (
-                      <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
-                        <div className="flex items-center gap-4">
-                          <div className="rounded-full bg-green-500/10 p-2">
-                            <Trophy className="h-4 w-4 text-green-500" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-zinc-200">
-                                vs {game.opponent}
-                              </p>
-                              <span className="rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500">
-                                Victory
-                              </span>
-                            </div>
-                            <p className="text-sm text-zinc-400">
-                              {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
-                      </div>
+                      <GameHistoryCard key={game.id} game={game} />
                     ))}
                 </div>
               )}
@@ -604,27 +558,7 @@ export default function DashboardPage() {
                   {gameHistory
                     .filter(game => game.result === 'loss')
                     .map((game) => (
-                      <div key={game.id} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-4 transition-colors hover:bg-zinc-800/50">
-                        <div className="flex items-center gap-4">
-                          <div className="rounded-full bg-red-500/10 p-2">
-                            <Trophy className="h-4 w-4 text-red-500" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-zinc-200">
-                                vs {game.opponent}
-                              </p>
-                              <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-500">
-                                Defeat
-                              </span>
-                            </div>
-                            <p className="text-sm text-zinc-400">
-                              {game.topic} Quiz • {game.score} correct • Opponent: {game.opponentScore}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-sm text-zinc-500">{formatRelativeTime(game.date)}</span>
-                      </div>
+                      <GameHistoryCard key={game.id} game={game} />
                     ))}
                 </div>
               )}

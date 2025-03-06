@@ -41,15 +41,46 @@ export async function joinRoom(roomId: string, user: string) {
 
 export async function storeQuizResults(roomId: string, results: any) {
   try {
+    console.log(`Storing quiz results for room ${roomId}`);
+    
+    // Map results to the format expected by the API
+    const formattedResults = {
+      results: {
+        participants: results.participants.map((p: any) => ({
+          id: p.id,
+          username: p.username,
+          score: p.score,
+          totalQuestions: p.totalQuestions || results.participants[0]?.totalQuestions || 0
+        })),
+        winners: results.winners?.map((w: any) => ({
+          id: w.id,
+          username: w.username,
+          score: w.score
+        })) || []
+      }
+    };
+    
     const response = await axios.post(
       `http://localhost:3000/api/room/${roomId}/results`,
+      formattedResults,
       {
-        results,
+        headers: {
+          'Content-Type': 'application/json'
+        }
       }
     );
+    
+    console.log(`Quiz results stored successfully for room ${roomId}`);
     return response.data;
   } catch (error) {
     console.error("Error storing quiz results:", error);
+    if (axios.isAxiosError(error)) {
+      console.error('Axios Error Details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+    }
     throw error;
   }
 }

@@ -144,12 +144,13 @@ const QuizSession: React.FC<QuizSessionProps> = ({ roomId }) => {
     newAnswers[currentQuestionIndex] = selectedOption;
     setAnswers(newAnswers);
 
-    // Send answer to server
-    if (socket) {
+    // Send answer to server with user ID
+    if (socket && session?.user?.id) {
       socket.emit("submitAnswer", {
         roomId,
         questionIndex: currentQuestionIndex,
         selectedOption,
+        userId: session.user.id
       });
     }
   };
@@ -186,34 +187,108 @@ const QuizSession: React.FC<QuizSessionProps> = ({ roomId }) => {
     );
   }
 
-  if (quizEnded) {
-    // Find the winner (participant with highest score)
-    const getWinner = () => {
-      if (!results || !results.participants || results.participants.length === 0) return null;
-      
-      let highestScore = -1;
-      let winners = [];
-      
-      for (const participant of results.participants) {
-        if (participant.score > highestScore) {
-          highestScore = participant.score;
-          winners = [participant];
-        } else if (participant.score === highestScore) {
-          winners.push(participant);
-        }
-      }
-      
-      return {
-        winners,
-        highestScore,
-        isTie: winners.length > 1
-      };
-    };
-    
-    const winnerInfo = getWinner();
-    const currentUserScore = results?.participants?.find((p: any) => p.id === session?.user?.id)?.score || 0;
-    const isCurrentUserWinner = winnerInfo?.winners.some((w: any) => w.id === session?.user?.id) || false;
+  if (quizEnded && results && (
+    <div className="h-full flex items-center justify-center">
+      <div className="w-full max-w-md bg-gradient-to-b from-gray-900 to-black rounded-xl shadow-2xl border border-gray-800 p-6 text-center">
+        <h2 className="text-2xl font-bold text-white mb-4">Quiz Results</h2>
+        
+        {results ? (
+          <div className="space-y-6">
+            {/* Winner Section */}
+            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+              {results.winners && results.winners.length > 0 && (
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500/20 mb-3">
+                    <Trophy className="h-6 w-6 text-yellow-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Winner!</h3>
+                  <p className="text-2xl font-bold text-yellow-400 mb-1">
+                    {results.winners[0]?.username}
+                  </p>
+                  <p className="text-gray-300">
+                    with {results.winners[0]?.score} points
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <p className="text-lg text-gray-300">
+              Your Score: <span className={results.winners && results.winners.some((w: any) => w.id === session?.user?.id) ? "text-yellow-400 font-bold" : "text-white font-bold"}>
+                {results.participants?.find((p: any) => p.id === session?.user?.id)?.score || 0} points
+              </span>
+              <span className="text-gray-500 text-sm ml-2">
+                ({questions.length} questions)
+              </span>
+            </p>
+            
+            <div className="mt-6 mb-4">
+              <h3 className="text-lg font-semibold text-gray-300 mb-3">Leaderboard</h3>
+              <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="py-2 px-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
+                      <th className="py-2 px-3 text-left text-xs font-medium text-gray-400 uppercase">Player</th>
+                      <th className="py-2 px-3 text-right text-xs font-medium text-gray-400 uppercase">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.participants?.map((participant: any, index: number) => (
+                      <tr 
+                        key={participant.id} 
+                        className={`${
+                          participant.id === session?.user?.id 
+                            ? "bg-blue-900/30" 
+                            : index % 2 === 0 ? "bg-gray-800/30" : "bg-gray-800/10"
+                        } ${
+                          results.winners && results.winners.some((w: any) => w.id === participant.id)
+                            ? "border-l-2 border-yellow-500"
+                            : ""
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-sm font-medium text-gray-300">
+                          {index + 1}
+                        </td>
+                        <td className="py-3 px-3 text-sm text-gray-300 flex items-center">
+                          {participant.id === session?.user?.id && (
+                            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                          )}
+                          {participant.username}
+                          {results.winners && results.winners.some((w: any) => w.id === participant.id) && (
+                            <Trophy className="h-4 w-4 text-yellow-500 ml-2" />
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-sm font-medium text-right text-gray-300">
+                          {participant.score}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
+            <div className="mt-6 flex flex-col items-center">
+              <p className="text-sm text-gray-400 mb-3">
+                Redirecting to dashboard in {redirectCountdown} seconds
+              </p>
+              <Button 
+                onClick={handleGoToDashboard}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2 px-6 rounded-full transition-all shadow-lg hover:shadow-blue-500/20"
+              >
+                Go to Dashboard Now
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-t-blue-500 border-b-blue-700 border-l-blue-600 border-r-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-300">Loading results...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="w-full max-w-md bg-gradient-to-b from-gray-900 to-black rounded-xl shadow-2xl border border-gray-800 p-6 text-center">
@@ -223,73 +298,95 @@ const QuizSession: React.FC<QuizSessionProps> = ({ roomId }) => {
             <div className="space-y-6">
               {/* Winner Section */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                {winnerInfo?.isTie ? (
-                  <div className="text-center">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500/20 mb-3">
-                      <Trophy className="h-6 w-6 text-yellow-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">It's a Tie!</h3>
-                    <p className="text-gray-300 mb-3">
-                      {winnerInfo.winners.map((w: any) => w.username).join(' & ')} tied with {winnerInfo.highestScore} points
-                    </p>
-                  </div>
-                ) : (
+                {results.winners && results.winners.length > 0 && (
                   <div className="text-center">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500/20 mb-3">
                       <Trophy className="h-6 w-6 text-yellow-500" />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-2">Winner!</h3>
                     <p className="text-2xl font-bold text-yellow-400 mb-1">
-                      {winnerInfo?.winners[0]?.username}
+                      {results.winners[0]?.username}
                     </p>
                     <p className="text-gray-300">
-                      with {winnerInfo?.highestScore} points
+                      with {results.winners[0]?.score} points
                     </p>
                   </div>
                 )}
               </div>
               
               <p className="text-lg text-gray-300">
-                Your Score: <span className={isCurrentUserWinner ? "text-yellow-400 font-bold" : "text-white font-bold"}>
-                  {currentUserScore}/{questions.length}
+                Your Score: <span className={results.winners && results.winners.some((w: any) => w.id === session?.user?.id) ? "text-yellow-400 font-bold" : "text-white font-bold"}>
+                  {results.participants?.find((p: any) => p.id === session?.user?.id)?.score || 0} points
+                </span>
+                <span className="text-gray-500 text-sm ml-2">
+                  ({questions.length} questions)
                 </span>
               </p>
               
-              <div className="grid grid-cols-2 gap-4 mt-6">
-                {results.participants?.map((participant: any) => (
-                  <div
-                    key={participant.id}
-                    className={`bg-gray-800 border ${
-                      participant.id === session?.user?.id 
-                        ? "border-blue-500" 
-                        : winnerInfo?.winners.some((w: any) => w.id === participant.id)
-                          ? "border-yellow-500"
-                          : "border-gray-700"
-                    } rounded-lg p-4`}
-                  >
-                    <p className="font-medium text-white">{participant.username}</p>
-                    <p className={`text-lg font-bold ${
-                      winnerInfo?.winners.some((w: any) => w.id === participant.id)
-                        ? "text-yellow-400"
-                        : "text-blue-400"
-                    }`}>
-                      {participant.score} pts
-                    </p>
-                  </div>
-                ))}
+              <div className="mt-6 mb-4">
+                <h3 className="text-lg font-semibold text-gray-300 mb-3">Leaderboard</h3>
+                <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-2 px-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
+                        <th className="py-2 px-3 text-left text-xs font-medium text-gray-400 uppercase">Player</th>
+                        <th className="py-2 px-3 text-right text-xs font-medium text-gray-400 uppercase">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.participants?.map((participant: any, index: number) => (
+                        <tr 
+                          key={participant.id} 
+                          className={`${
+                            participant.id === session?.user?.id 
+                              ? "bg-blue-900/30" 
+                              : index % 2 === 0 ? "bg-gray-800/30" : "bg-gray-800/10"
+                          } ${
+                            results.winners && results.winners.some((w: any) => w.id === participant.id)
+                              ? "border-l-2 border-yellow-500"
+                              : ""
+                          }`}
+                        >
+                          <td className="py-3 px-3 text-sm font-medium text-gray-300">
+                            {index + 1}
+                          </td>
+                          <td className="py-3 px-3 text-sm text-gray-300 flex items-center">
+                            {participant.id === session?.user?.id && (
+                              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                            )}
+                            {participant.username}
+                            {results.winners && results.winners.some((w: any) => w.id === participant.id) && (
+                              <Trophy className="h-4 w-4 text-yellow-500 ml-2" />
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-sm font-medium text-right text-gray-300">
+                            {participant.score}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              
-              <div className="mt-6">
+
+              <div className="mt-6 flex flex-col items-center">
+                <p className="text-sm text-gray-400 mb-3">
+                  Redirecting to dashboard in {redirectCountdown} seconds
+                </p>
                 <Button 
                   onClick={handleGoToDashboard}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2 px-6 rounded-full transition-all shadow-lg hover:shadow-blue-500/20"
                 >
-                  Go to Dashboard {redirectCountdown !== null && `(${redirectCountdown}s)`}
+                  Go to Dashboard Now
                 </Button>
               </div>
             </div>
           ) : (
-            <p className="text-gray-400">Waiting for results...</p>
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-t-blue-500 border-b-blue-700 border-l-blue-600 border-r-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-300">Loading results...</p>
+            </div>
           )}
         </div>
       </div>
