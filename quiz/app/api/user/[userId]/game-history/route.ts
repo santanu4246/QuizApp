@@ -63,59 +63,87 @@ export async function GET(
 
     // For each room, get all participant answers
     const games = await Promise.all(rooms.map(async (room) => {
-      // Get opponent information
-      const opponents = room.participants.filter(p => p.userId !== userId);
-      const opponent = opponents.length > 0 ? opponents[0] : null;
+      // Get all participants including the current user
+      const allParticipantIds = room.participants.map(p => p.userId);
       
-      // Get user answers for this room
-      const userAnswers = await prisma.participantAnswer.findMany({
-        where: {
-          participantId: userId,
-          question: {
-            gameSessionId: room.id
-          }
-        }
-      });
+      // Add host if not already in participants
+      if (!allParticipantIds.includes(room.hostId)) {
+        allParticipantIds.push(room.hostId);
+      }
       
-      // Calculate user score
-      const userScore = userAnswers.reduce((total, answer) => 
-        total + (answer.isCorrect ? answer.pointsEarned : 0), 0);
-      
-      // Get opponent answers if applicable
-      let opponentScore = 0;
-      if (opponent) {
-        const opponentAnswers = await prisma.participantAnswer.findMany({
+      // Get scores for all participants
+      const participantScores = await Promise.all(allParticipantIds.map(async (participantId) => {
+        const answers = await prisma.participantAnswer.findMany({
           where: {
-            participantId: opponent.userId,
+            participantId,
             question: {
               gameSessionId: room.id
             }
           }
         });
         
-        opponentScore = opponentAnswers.reduce((total, answer) => 
+        const score = answers.reduce((total, answer) => 
           total + (answer.isCorrect ? answer.pointsEarned : 0), 0);
-      } else {
-        // Estimate if no opponent
-        opponentScore = Math.floor(userScore * 0.8);
-      }
+        
+        // Get participant name - either from participants or host
+        let name;
+        const participant = room.participants.find(p => p.userId === participantId);
+        if (participant) {
+          name = participant.user.name;
+        } else if (participantId === room.hostId) {
+          name = room.host.name;
+        } else {
+          name = "Unknown Player";
+        }
+        
+        return {
+          id: participantId,
+          name,
+          score,
+          isCurrentUser: participantId === userId
+        };
+      }));
       
-      // Determine game result
-      let result: "win" | "loss" | "tie" = "tie";
-      if (userScore > opponentScore) {
-        result = "win";
-      } else if (userScore < opponentScore) {
-        result = "loss";
-      }
-
+      // Sort by score in descending order to find the winner
+      participantScores.sort((a, b) => b.score - a.score);
+      
+      // Find highest score
+      const highestScore = participantScores.length > 0 ? participantScores[0].score : 0;
+      
+      // Mark winners (could be multiple with same score)
+      const participantsWithResults = participantScores.map(participant => {
+        let result;
+        if (participant.score === highestScore) {
+          // If there's only one participant with the highest score, they're the winner
+          // If multiple participants have the highest score, it's a tie
+          const playersWithHighScore = participantScores.filter(p => p.score === highestScore);
+          result = playersWithHighScore.length === 1 ? "win" : "tie";
+        } else {
+          // Anyone not with the highest score has lost
+          result = "loss";
+        }
+        
+        return {
+          ...participant,
+          result
+        };
+      });
+      
+      // Find the current user's result
+      const currentUserParticipant = participantsWithResults.find(p => p.isCurrentUser);
+      
       return {
         id: room.id,
         topic: room.QuizCategory?.name || room.quizTopic || "General Knowledge",
         date: room.updatedAt.toISOString(),
-        opponent: opponent?.user?.name || "Solo Game",
-        result,
-        score: `${userScore} points`,
-        opponentScore: `${opponentScore} points`
+        participants: participantsWithResults,
+        currentUserResult: currentUserParticipant?.result || "loss",
+        userScore: currentUserParticipant?.score || 0,
+        // Keep these fields for backward compatibility with existing code
+        opponent: participantsWithResults.filter(p => !p.isCurrentUser)[0]?.name || "Solo Game",
+        result: currentUserParticipant?.result || "loss",
+        score: `${currentUserParticipant?.score || 0} points`,
+        opponentScore: `${participantsWithResults.filter(p => !p.isCurrentUser)[0]?.score || 0} points`
       };
     }));
 
@@ -124,4 +152,4 @@ export async function GET(
     console.error("Error fetching game history:", error);
     return NextResponse.json({ games: [] });
   }
-} 
+}

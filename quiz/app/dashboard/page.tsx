@@ -542,6 +542,7 @@ export default function DashboardPage() {
                   {gameHistory
                     .filter(game => game.result === 'win')
                     .map((game) => (
+                      console.log(game),
                       <GameHistoryCard key={game.id} game={game} />
                     ))}
                 </div>
