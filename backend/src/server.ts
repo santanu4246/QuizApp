@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { PORT } from "./config";
 import { createRoomData, joinRoom } from "./utils";
+import { generateMcqs } from "./utils/geminiApi";
 import axios from "axios";
 
 const app = express();
@@ -28,45 +29,6 @@ interface EnhancedRoomData {
     username: string;
   }>;
 }
-
-// Sample MCQ questions for demo
-const demoQuestions = [
-  {
-    id: "q1",
-    questionText: "What is the capital of France?",
-    options: ["London", "Berlin", "Paris", "Madrid"],
-    correctOption: 2,
-    timeLimit: 30,
-  },
-  {
-    id: "q2",
-    questionText: "Which planet is known as the Red Planet?",
-    options: ["Venus", "Mars", "Jupiter", "Saturn"],
-    correctOption: 1,
-    timeLimit: 30,
-  },
-  {
-    id: "q3",
-    questionText: "What is the largest mammal?",
-    options: ["Elephant", "Giraffe", "Blue Whale", "Hippopotamus"],
-    correctOption: 2,
-    timeLimit: 30,
-  },
-  {
-    id: "q4",
-    questionText: "Which element has the chemical symbol 'O'?",
-    options: ["Gold", "Oxygen", "Osmium", "Oganesson"],
-    correctOption: 1,
-    timeLimit: 30,
-  },
-  {
-    id: "q5",
-    questionText: "Who painted the Mona Lisa?",
-    options: ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Michelangelo"],
-    correctOption: 2,
-    timeLimit: 30,
-  }
-];
 
 // Store for rooms and quiz data
 const rooms: Record<string, EnhancedRoomData> = {};
@@ -109,8 +71,38 @@ io.on("connection", (socket) => {
       }
       
       // Get the current question's time limit (default 30 seconds)
-      const currentQuestion = activeQuizzes[roomId]?.[currentState.currentQuestionIndex] || 
-                             demoQuestions[currentState.currentQuestionIndex];
+      if (!activeQuizzes[roomId] || !activeQuizzes[roomId][currentState.currentQuestionIndex]) {
+        console.error(`Question not found for room ${roomId} at index ${currentState.currentQuestionIndex}`);
+        
+        // Generate a temporary placeholder question
+        const placeholderQuestion = {
+          id: `placeholder-q${currentState.currentQuestionIndex}`,
+          questionText: `Question ${currentState.currentQuestionIndex + 1} (Placeholder)`,
+          options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+          correctOption: 0,
+          timeLimit: 30,
+          difficulty: "MEDIUM"
+        };
+        
+        // Use the placeholder
+        const fullTimeLimit = 30;
+        
+        // Calculate elapsed time since question started
+        const timeElapsed = Date.now() - currentState.startTime;
+        const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
+        
+        console.log(`Late-joining player in room ${roomId}: Using placeholder question, Time left: ${Math.ceil(timeLeft / 1000)}s`);
+        
+        socket.emit("quizStart", {
+          questions: [placeholderQuestion],
+          currentQuestionIndex: 0,
+          timeLeft: Math.ceil(timeLeft / 1000)
+        });
+        
+        return;
+      }
+      
+      const currentQuestion = activeQuizzes[roomId][currentState.currentQuestionIndex];
       const fullTimeLimit = currentQuestion.timeLimit || 30;
       
       // Calculate elapsed time since question started
@@ -123,7 +115,7 @@ io.on("connection", (socket) => {
       socket.emit("nextQuestion", {
         questionIndex: currentState.currentQuestionIndex,
         timeLeft: Math.ceil(timeLeft / 1000),
-        totalQuestions: activeQuizzes[roomId]?.length || demoQuestions.length
+        totalQuestions: activeQuizzes[roomId].length
       });
       
       // Send quiz questions to the player immediately
@@ -210,8 +202,38 @@ io.on("connection", (socket) => {
         
         if (currentState) {
           // Get the current question's time limit (default 30 seconds)
-          const currentQuestion = activeQuizzes[roomCode]?.[currentState.currentQuestionIndex] || 
-                                 demoQuestions[currentState.currentQuestionIndex];
+          if (!activeQuizzes[roomCode] || !activeQuizzes[roomCode][currentState.currentQuestionIndex]) {
+            console.error(`Question not found for room ${roomCode} at index ${currentState.currentQuestionIndex}`);
+            
+            // Generate a temporary placeholder question
+            const placeholderQuestion = {
+              id: `placeholder-q${currentState.currentQuestionIndex}`,
+              questionText: `Question ${currentState.currentQuestionIndex + 1} (Placeholder)`,
+              options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+              correctOption: 0,
+              timeLimit: 30,
+              difficulty: "MEDIUM"
+            };
+            
+            // Use the placeholder
+            const fullTimeLimit = 30;
+            
+            // Calculate elapsed time since question started
+            const timeElapsed = Date.now() - currentState.startTime;
+            const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
+            
+            console.log(`Late-joining player in room ${roomCode}: Using placeholder question, Time left: ${Math.ceil(timeLeft / 1000)}s`);
+            
+            socket.emit("quizStart", {
+              questions: [placeholderQuestion],
+              currentQuestionIndex: 0,
+              timeLeft: Math.ceil(timeLeft / 1000)
+            });
+            
+            return;
+          }
+          
+          const currentQuestion = activeQuizzes[roomCode][currentState.currentQuestionIndex];
           const fullTimeLimit = currentQuestion.timeLimit || 30;
           
           // Calculate elapsed time since question started
@@ -255,58 +277,39 @@ io.on("connection", (socket) => {
     }
 
     // Get the current question
-    const currentQuestion = activeQuizzes[roomId]?.[questionIndex] || demoQuestions[questionIndex];
-    if (!currentQuestion) {
-      console.error(`Question not found for index: ${questionIndex}`);
+    if (!activeQuizzes[roomId] || !activeQuizzes[roomId][questionIndex]) {
+      console.error(`Question not found for room ${roomId} at index ${questionIndex}`);
       return;
     }
-
+    
+    const currentQuestion = activeQuizzes[roomId][questionIndex];
+    
+    // Check if the answer is correct
+    const isCorrect = selectedOption === currentQuestion.correctOption;
+    
+    // Calculate points for this answer
+    const points = isCorrect ? 10 : 0;
+    
+    // Save user's previous score for display
+    quizResults[roomId][userId].previousScore = quizResults[roomId][userId].score;
+    
+    // Update the score
+    quizResults[roomId][userId].score += points;
+    
     // Store the answer
     quizResults[roomId][userId].answers[questionIndex] = selectedOption;
-
-    // Verify the selected option is within valid range
-    const isValidOption = selectedOption >= 0 && selectedOption < currentQuestion.options.length;
     
-    // Check if answer is correct
-    const isCorrect = isValidOption && selectedOption === currentQuestion.correctOption;
-    
-    // Fixed 10 points for correct answers, 0 for incorrect
-    const pointsEarned = isCorrect ? 10 : 0;
-    
-    // Update user's score
-    if (isCorrect) {
-      quizResults[roomId][userId].score += pointsEarned;
-      console.log(`User ${userId} answered correctly for question ${questionIndex}, earned ${pointsEarned} points`);
-    } else {
-      console.log(`User ${userId} answered incorrectly for question ${questionIndex}. Selected: ${selectedOption}, Correct: ${currentQuestion.correctOption}`);
-    }
-
-    // Store previous score for point calculation in question results
-    quizResults[roomId][userId].previousScore = quizResults[roomId][userId].score - pointsEarned;
-
-    // Store in database
+    // Store the answer in the database
     storeQuestionAnswers(roomId, questionIndex, selectedOption, userId, isCorrect);
-
-    // Send immediate feedback to the user who answered
+    
+    // Send feedback to the user
     socket.emit("answerFeedback", {
       questionIndex,
       selectedOption,
       isCorrect,
       correctOption: currentQuestion.correctOption,
-      pointsEarned
+      pointsEarned: points
     });
-
-    // Check if all participants have answered this question
-    const room = rooms[roomId];
-    const allAnswered = room?.participants?.every(participant => {
-      return quizResults[roomId][participant.id]?.answers[questionIndex] !== undefined;
-    });
-
-    // If all participants have answered, move to next question immediately
-    if (allAnswered) {
-      clearQuestionTimer(roomId);
-      handleQuestionEnd(roomId, questionIndex);
-    }
   });
 
   socket.on("disconnect", () => {
@@ -349,35 +352,105 @@ function startQuiz(roomId: string) {
   
   // Initialize quiz questions if not already done
   if (!activeQuizzes[roomId]) {
-    // Get the number of questions from room settings
+    // Get the quiz settings from room
     const questionCount = rooms[roomId].questionCount || 5;
+    const topic = rooms[roomId].topic || "general knowledge";
+    const difficulty = rooms[roomId].difficulty || "MEDIUM";
     
-    // Select questions based on room settings (limit to the requested number)
-    const selectedQuestions = demoQuestions.slice(0, questionCount);
+    console.log(`Generating quiz: Topic: ${topic}, Questions: ${questionCount}, Difficulty: ${difficulty}`);
     
-    // Store the selected questions for this quiz
-    activeQuizzes[roomId] = selectedQuestions;
-    
-    // Store questions in database
-    storeQuizQuestions(roomId, selectedQuestions);
+    // Generate questions using Gemini API
+    generateMcqs(topic, questionCount, difficulty)
+      .then(questions => {
+        // Store the generated questions for this quiz
+        activeQuizzes[roomId] = questions;
+        
+        // Log the generated MCQs for debugging
+        console.log(`Generated ${questions.length} MCQs for room ${roomId} with ${difficulty} difficulty:`);
+        questions.forEach((q, index) => {
+          console.log(`Question ${index + 1}: ${q.questionText}`);
+          console.log(`Options: ${q.options.join(' | ')}`);
+          console.log(`Correct Answer: ${q.options[q.correctOption]} (index: ${q.correctOption})`);
+          console.log('---');
+        });
+        
+        // Store questions in database
+        storeQuizQuestions(roomId, questions);
+        
+        // Initialize quiz results
+        if (!quizResults[roomId]) {
+          quizResults[roomId] = {};
+          
+          // Initialize results for each participant
+          rooms[roomId].participants.forEach(participant => {
+            quizResults[roomId][participant.id] = {
+              score: 0,
+              answers: [],
+              previousScore: 0
+            };
+          });
+        }
+        
+        // Start the first question timer
+        startQuestionTimer(roomId);
+      })
+      .catch(error => {
+        console.error(`Error generating questions with Gemini API: ${error.message}`);
+        
+        // Generate basic placeholder questions since Gemini API failed
+        const placeholderQuestions = generatePlaceholderQuestions(topic, questionCount, difficulty);
+        activeQuizzes[roomId] = placeholderQuestions;
+        
+        console.log(`Generated ${placeholderQuestions.length} placeholder MCQs for room ${roomId} due to API failure`);
+        
+        // Store questions in database
+        storeQuizQuestions(roomId, placeholderQuestions);
+        
+        // Initialize quiz results
+        if (!quizResults[roomId]) {
+          quizResults[roomId] = {};
+          
+          // Initialize results for each participant
+          rooms[roomId].participants.forEach(participant => {
+            quizResults[roomId][participant.id] = {
+              score: 0,
+              answers: [],
+              previousScore: 0
+            };
+          });
+        }
+        
+        // Start the first question timer
+        startQuestionTimer(roomId);
+      });
+  } else {
+    // Questions already exist, just start the timer
+    startQuestionTimer(roomId);
   }
+}
+
+// Function to generate placeholder questions when Gemini API fails
+function generatePlaceholderQuestions(topic: string, count: number, difficulty: string): any[] {
+  console.log(`Generating ${count} placeholder questions about ${topic} due to API failure`);
   
-  // Initialize quiz results
-  if (!quizResults[roomId]) {
-    quizResults[roomId] = {};
-    
-    // Initialize results for each participant
-    rooms[roomId].participants.forEach(participant => {
-      quizResults[roomId][participant.id] = {
-        score: 0,
-        answers: [],
-        previousScore: 0
-      };
+  const questions = [];
+  for (let i = 0; i < count; i++) {
+    questions.push({
+      id: `placeholder-q${i + 1}`,
+      questionText: `Question ${i + 1} about ${topic} (Gemini API unavailable)`,
+      options: [
+        "First option",
+        "Second option",
+        "Third option",
+        "Fourth option"
+      ],
+      correctOption: 0,
+      timeLimit: 30,
+      difficulty: difficulty
     });
   }
   
-  // Start the first question timer
-  startQuestionTimer(roomId);
+  return questions;
 }
 
 // Function to start the timer for a question
@@ -407,11 +480,12 @@ function startQuestionTimer(roomId: string) {
   const currentIndex = roomTimers[roomId].currentQuestionIndex;
   
   // Get the current question
-  const currentQuestion = activeQuizzes[roomId]?.[currentIndex] || demoQuestions[currentIndex];
-  if (!currentQuestion) {
-    console.error(`Question not found for index: ${currentIndex}`);
+  if (!activeQuizzes[roomId] || !activeQuizzes[roomId][currentIndex]) {
+    console.error(`Question not found for room ${roomId} at index ${currentIndex}`);
     return;
   }
+  
+  const currentQuestion = activeQuizzes[roomId][currentIndex];
   
   // Get the time limit for this question - changed default from 15 to 30 seconds
   const timeLimit = currentQuestion.timeLimit || 30;
@@ -422,12 +496,12 @@ function startQuestionTimer(roomId: string) {
   io.in(roomId).emit("nextQuestion", {
     questionIndex: currentIndex,
     timeLeft: timeLimit,
-    totalQuestions: activeQuizzes[roomId]?.length || demoQuestions.length
+    totalQuestions: activeQuizzes[roomId].length
   });
   
   // For the first question, also emit a quizStart event with full question details
   if (currentIndex === 0) {
-    const questions = activeQuizzes[roomId] || demoQuestions;
+    const questions = activeQuizzes[roomId];
     io.in(roomId).emit("quizStart", {
       questions: questions,
       currentQuestionIndex: 0,
@@ -488,123 +562,119 @@ function clearQuestionTimer(roomId: string) {
 
 // Function to handle the end of a question
 function handleQuestionEnd(roomId: string, questionIndex: number) {
-  const room = rooms[roomId];
-  if (!room) {
-    console.error(`Room ${roomId} not found when handling question end`);
-    return;
-  }
-
   // Get the current question
-  const currentQuestion = activeQuizzes[roomId]?.[questionIndex] || demoQuestions[questionIndex];
-  if (!currentQuestion) {
-    console.error(`Question not found for index: ${questionIndex}`);
+  if (!activeQuizzes[roomId] || !activeQuizzes[roomId][questionIndex]) {
+    console.error(`Question not found for room ${roomId} at index ${questionIndex}`);
     return;
   }
-
-  // Prepare participant answers for the results
-  const participantAnswers = room.participants.map(participant => {
-    const userResults = quizResults[roomId]?.[participant.id];
-    const selectedOption = userResults?.answers[questionIndex];
-    const isCorrect = selectedOption === currentQuestion.correctOption;
-    
-    // Calculate points for this question
-    let pointsForThisQuestion = 0;
-    if (isCorrect) {
-      // Fixed 10 points for correct answers
-      pointsForThisQuestion = 10;
-      
-      // Store the current score as previous score for next calculation
-      if (userResults) {
-        userResults.previousScore = userResults.score;
-      }
-    }
-    
-    return {
-      participantId: participant.id,
-      username: participant.username,
-      selectedOption: selectedOption !== undefined ? selectedOption : null,
-      isCorrect: isCorrect,
-      pointsEarned: pointsForThisQuestion
-    };
-  });
-
-  // Send question results to all clients in the room
+  
+  const currentQuestion = activeQuizzes[roomId][questionIndex];
+  
+  // Collect all the answers for this question
+  const participantAnswers: any[] = [];
+  
+  if (quizResults[roomId]) {
+    Object.entries(quizResults[roomId]).forEach(([userId, userResults]) => {
+      const answer = userResults.answers[questionIndex] !== undefined ? userResults.answers[questionIndex] : -1;
+      participantAnswers.push({
+        userId,
+        answer,
+        isCorrect: answer === currentQuestion.correctOption
+      });
+    });
+  }
+  
+  // Send question results to all clients
   io.in(roomId).emit("questionResults", {
     questionIndex,
     correctOption: currentQuestion.correctOption,
     participantAnswers,
-    isLastQuestion: questionIndex === (activeQuizzes[roomId]?.length || demoQuestions.length) - 1
+    isLastQuestion: questionIndex === (activeQuizzes[roomId].length) - 1
   });
-
-  // If this was the last question, end the quiz
-  if (questionIndex === (activeQuizzes[roomId]?.length || demoQuestions.length) - 1) {
-    // Calculate final results
-    const finalResults: Record<string, any> = {};
-    
-    // Process each participant's results
-    room.participants.forEach(participant => {
-      // Get or initialize user results
-      const userResults = quizResults[roomId]?.[participant.id] || { score: 0, answers: [], previousScore: 0 };
-      
-      // Clean up answers array (replace undefined/null with 0)
-      const cleanedAnswers = Array(activeQuizzes[roomId]?.length || demoQuestions.length).fill(0);
-      if (Array.isArray(userResults.answers)) {
-        userResults.answers.forEach((ans, idx) => {
-          if (ans !== null && ans !== undefined && ans !== -1) {
-            cleanedAnswers[idx] = ans;
-          }
-        });
-      }
-      
-      finalResults[participant.id] = {
-        id: participant.id,
-        username: participant.username,
-        score: userResults.score || 0,
-        answers: cleanedAnswers,
-        totalQuestions: activeQuizzes[roomId]?.length || demoQuestions.length
-      };
-    });
-    
-    // Calculate rankings
-    const sortedParticipants = Object.values(finalResults).sort((a, b) => b.score - a.score);
-    
-    // Assign ranks and determine winners
-    sortedParticipants.forEach((participant, index) => {
-      const rank = index + 1;
-      finalResults[participant.id].rank = rank;
-      finalResults[participant.id].isWinner = rank === 1;
-    });
-    
-    // Update room status to FINISHED
-    updateRoomStatus(roomId, "FINISHED").then(() => {
-      // Store final results in database after room status is updated
-      storeQuizResults(roomId, finalResults).catch(error => {
-        console.error("Failed to store results, but continuing with game end:", error);
-      });
-    }).catch(error => {
-      console.error("Failed to update room status, but continuing with game end:", error);
-      // Try to store results anyway
-      storeQuizResults(roomId, finalResults).catch(resultError => {
-        console.error("Also failed to store results:", resultError);
-      });
-    });
-    
-    // Send final results to all clients in the room
-    io.in(roomId).emit("quizResults", {
-      participants: sortedParticipants,
-      winners: sortedParticipants.filter(p => p.rank === 1)
-    });
-    
-    // Clean up room resources
-    delete roomTimers[roomId];
-    
-    console.log(`Quiz ended for room ${roomId} with ${sortedParticipants.length} participants`);
+  
+  // Check if this is the last question
+  if (questionIndex === (activeQuizzes[roomId].length) - 1) {
+    // End of quiz
+    setTimeout(() => {
+      endQuiz(roomId);
+    }, 5000); // Wait 5 seconds before ending the quiz
   } else {
-    // Move to the next question after a delay
+    // Start the next question timer
     setTimeout(() => {
       startQuestionTimer(roomId);
-    }, 3000); // 3 second delay between questions
+    }, 3000); // 3-second delay between questions
   }
+}
+
+// Function to end the quiz and calculate final results
+function endQuiz(roomId: string) {
+  const room = rooms[roomId];
+  if (!room) {
+    console.error(`Room ${roomId} not found when ending quiz`);
+    return;
+  }
+  
+  // Calculate final results
+  const finalResults: Record<string, any> = {};
+  
+  // Process each participant's results
+  room.participants.forEach(participant => {
+    // Get or initialize user results
+    const userResults = quizResults[roomId]?.[participant.id] || { score: 0, answers: [], previousScore: 0 };
+    
+    // Clean up answers array (replace undefined/null with 0)
+    const cleanedAnswers = Array(activeQuizzes[roomId].length).fill(0);
+    if (Array.isArray(userResults.answers)) {
+      userResults.answers.forEach((ans, idx) => {
+        if (ans !== null && ans !== undefined && ans !== -1) {
+          cleanedAnswers[idx] = ans;
+        }
+      });
+    }
+    
+    finalResults[participant.id] = {
+      id: participant.id,
+      username: participant.username,
+      score: userResults.score || 0,
+      answers: cleanedAnswers,
+      totalQuestions: activeQuizzes[roomId].length
+    };
+  });
+  
+  // Calculate rankings
+  const sortedParticipants = Object.values(finalResults).sort((a, b) => b.score - a.score);
+  
+  // Assign ranks and determine winners
+  sortedParticipants.forEach((participant, index) => {
+    const rank = index + 1;
+    finalResults[participant.id].rank = rank;
+    finalResults[participant.id].isWinner = rank === 1;
+  });
+  
+  // Update room status to FINISHED
+  updateRoomStatus(roomId, "FINISHED").then(() => {
+    // Store final results in database after room status is updated
+    storeQuizResults(roomId, finalResults).catch(error => {
+      console.error("Failed to store results, but continuing with game end:", error);
+    });
+  }).catch(error => {
+    console.error("Failed to update room status, but continuing with game end:", error);
+    // Try to store results anyway
+    storeQuizResults(roomId, finalResults).catch(resultError => {
+      console.error("Also failed to store results:", resultError);
+    });
+  });
+  
+  // Send final results to all clients in the room
+  io.in(roomId).emit("quizResults", {
+    participants: sortedParticipants,
+    winners: sortedParticipants.filter(p => p.rank === 1)
+  });
+  
+  // Clean up room resources
+  delete roomTimers[roomId];
+  
+  console.log(`Quiz ended for room ${roomId} with ${sortedParticipants.length} participants`);
 }
 
 // Function to update room status in database
@@ -773,12 +843,13 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
     }
 
     // Get the current question
-    const currentQuestion = activeQuizzes[roomId]?.[questionIndex] || demoQuestions[questionIndex];
-    if (!currentQuestion) {
-      console.error(`Question not found for index: ${questionIndex}`);
+    if (!activeQuizzes[roomId] || !activeQuizzes[roomId][questionIndex]) {
+      console.error(`Question not found for room ${roomId} at index ${questionIndex}`);
       return null;
     }
-
+    
+    const currentQuestion = activeQuizzes[roomId][questionIndex];
+    
     // Fixed 10 points for correct answers, 0 for incorrect
     const pointsEarned = isCorrect ? 10 : 0;
     
@@ -808,12 +879,20 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
         
         if (!questionsExist) {
           // If questions don't exist or there aren't enough, store them now
-          await storeQuizQuestions(roomId, activeQuizzes[roomId] || demoQuestions);
+          if (activeQuizzes[roomId]) {
+            await storeQuizQuestions(roomId, activeQuizzes[roomId]);
+          } else {
+            console.error(`No questions available for room ${roomId}`);
+          }
         }
       } catch (error) {
         // If checking fails, try to store questions again
         if (axios.isAxiosError(error) && error.response?.status === 404) {
-          await storeQuizQuestions(roomId, activeQuizzes[roomId] || demoQuestions);
+          if (activeQuizzes[roomId]) {
+            await storeQuizQuestions(roomId, activeQuizzes[roomId]);
+          } else {
+            console.error(`No questions available for room ${roomId}`);
+          }
         }
       }
       
@@ -1016,14 +1095,22 @@ async function ensureApiRoutesExist(roomId: string) {
       
       if (!existingQuestions || existingQuestions.length === 0) {
         console.log(`No questions found for room ${roomId}, storing them`);
-        await storeQuizQuestions(roomId, activeQuizzes[roomId] || demoQuestions);
+        if (activeQuizzes[roomId]) {
+          await storeQuizQuestions(roomId, activeQuizzes[roomId]);
+        } else {
+          console.error(`No questions available for room ${roomId}`);
+        }
       } else {
         console.log(`Found ${existingQuestions.length} questions for room ${roomId}`);
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         console.log(`Question endpoint not found for room ${roomId}, storing questions`);
-        await storeQuizQuestions(roomId, activeQuizzes[roomId] || demoQuestions);
+        if (activeQuizzes[roomId]) {
+          await storeQuizQuestions(roomId, activeQuizzes[roomId]);
+        } else {
+          console.error(`No questions available for room ${roomId}`);
+        }
       } else {
         console.error(`Error checking questions for room ${roomId}:`, error);
       }

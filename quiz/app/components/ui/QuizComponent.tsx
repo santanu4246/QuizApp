@@ -10,6 +10,7 @@ interface QuizComponentProps {
     questionText: string;
     options: string[];
     timeLimit: number;
+    difficulty?: string;
   };
   onAnswer: (selectedOption: number) => void;
   currentQuestionIndex: number;
@@ -170,6 +171,7 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
           </h3>
           <div className="mt-1 text-sm text-gray-400">
             {answered ? 'Waiting for other players...' : 'Select the correct answer'}
+            {question.difficulty && <span className="ml-2 px-2 py-0.5 bg-blue-900 rounded-full text-xs font-medium text-blue-200">{question.difficulty}</span>}
           </div>
         </div>
         <div className="flex items-center space-x-2">

@@ -79,7 +79,6 @@ export default function DashboardPage() {
   const [joinOpen, setJoinOpen] = useState(false);
   interface InputData {
     topic?: string;
-    roomTimeLimit?: number;
     playerCount?: number;
     questionCount?: number;
     difficulty?: string;
@@ -180,7 +179,6 @@ export default function DashboardPage() {
   function handleCreateRoom() {
     if (
       inputedData.topic &&
-      inputedData.roomTimeLimit &&
       inputedData.playerCount &&
       inputedData.questionCount &&
       inputedData.difficulty
@@ -188,7 +186,7 @@ export default function DashboardPage() {
       setIsLoading(true);
       const roomData = {
         topic: inputedData.topic,
-        roomTimeLimit: Number(inputedData.roomTimeLimit),
+        roomTimeLimit: 300, // Fixed value of 5 minutes for the room
         playerCount: Number(inputedData.playerCount),
         questionCount: Number(inputedData.questionCount),
         difficulty: inputedData.difficulty.toUpperCase(),
@@ -279,25 +277,6 @@ export default function DashboardPage() {
                       <SelectItem value="general">General Knowledge</SelectItem>
                       <SelectItem value="science">Science</SelectItem>
                       <SelectItem value="history">History</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">
-                    Room Time Limit
-                  </label>
-                  <Select
-                    onValueChange={(value) =>
-                      handleChange("roomTimeLimit", parseInt(value))
-                    }
-                  >
-                    <SelectTrigger className="mt-1 border-zinc-700 bg-zinc-800 text-zinc-300">
-                      <SelectValue placeholder="Select time limit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="60">1 minute</SelectItem>
-                      <SelectItem value="120">2 minutes</SelectItem>
-                      <SelectItem value="300">5 minutes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
