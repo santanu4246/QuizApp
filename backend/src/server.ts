@@ -36,35 +36,35 @@ const demoQuestions = [
     questionText: "What is the capital of France?",
     options: ["London", "Berlin", "Paris", "Madrid"],
     correctOption: 2,
-    timeLimit: 15,
+    timeLimit: 30,
   },
   {
     id: "q2",
     questionText: "Which planet is known as the Red Planet?",
     options: ["Venus", "Mars", "Jupiter", "Saturn"],
     correctOption: 1,
-    timeLimit: 15,
+    timeLimit: 30,
   },
   {
     id: "q3",
     questionText: "What is the largest mammal?",
     options: ["Elephant", "Giraffe", "Blue Whale", "Hippopotamus"],
     correctOption: 2,
-    timeLimit: 15,
+    timeLimit: 30,
   },
   {
     id: "q4",
     questionText: "Which element has the chemical symbol 'O'?",
     options: ["Gold", "Oxygen", "Osmium", "Oganesson"],
     correctOption: 1,
-    timeLimit: 15,
+    timeLimit: 30,
   },
   {
     id: "q5",
     questionText: "Who painted the Mona Lisa?",
     options: ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Michelangelo"],
     correctOption: 2,
-    timeLimit: 15,
+    timeLimit: 30,
   }
 ];
 
@@ -79,7 +79,7 @@ const roomTimers: Record<string, {
   timer: NodeJS.Timeout | null,
   startTime: number,
   timerId?: NodeJS.Timeout,
-  syncTimerId?: NodeJS.Timeout
+  syncTimerId?: NodeJS.Timeout | null
 }> = {};
 
 io.on("connection", (socket) => {
@@ -91,6 +91,9 @@ io.on("connection", (socket) => {
   socket.on("requestQuizQuestions", (roomId) => {
     console.log(`Player ${socket.id} requesting quiz questions for room ${roomId}`);
 
+    // Make sure player is in the room
+    socket.join(roomId);
+
     if (activeQuizzes[roomId]) {
       console.log(`Sending quiz questions to player ${socket.id}`);
       const currentState = roomTimers[roomId];
@@ -100,14 +103,30 @@ io.on("connection", (socket) => {
         socket.emit("quizStart", {
           questions: activeQuizzes[roomId],
           currentQuestionIndex: 0,
-          timeLeft: 15 // Default time
+          timeLeft: 30 // Updated default time to 30 seconds
         });
         return;
       }
       
+      // Get the current question's time limit (default 30 seconds)
+      const currentQuestion = activeQuizzes[roomId]?.[currentState.currentQuestionIndex] || 
+                             demoQuestions[currentState.currentQuestionIndex];
+      const fullTimeLimit = currentQuestion.timeLimit || 30;
+      
+      // Calculate elapsed time since question started
       const timeElapsed = Date.now() - currentState.startTime;
-      const timeLeft = Math.max(0, demoQuestions[currentState.currentQuestionIndex].timeLimit * 1000 - timeElapsed);
+      const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
+      
+      console.log(`Late-joining player in room ${roomId}: Question ${currentState.currentQuestionIndex}, Time left: ${Math.ceil(timeLeft / 1000)}s of ${fullTimeLimit}s`);
 
+      // Also send current question state directly to ensure client has latest question
+      socket.emit("nextQuestion", {
+        questionIndex: currentState.currentQuestionIndex,
+        timeLeft: Math.ceil(timeLeft / 1000),
+        totalQuestions: activeQuizzes[roomId]?.length || demoQuestions.length
+      });
+      
+      // Send quiz questions to the player immediately
       socket.emit("quizStart", {
         questions: activeQuizzes[roomId],
         currentQuestionIndex: currentState.currentQuestionIndex,
@@ -178,18 +197,43 @@ io.on("connection", (socket) => {
         // Notify all clients that game has started
         io.in(roomCode).emit("gameStart");
 
-        // Start the quiz with a delay to ensure all clients have received the gameStart event
+        // Start the quiz with a minimal delay to ensure all clients have received the gameStart event
         setTimeout(() => {
           startQuiz(roomCode);
-        }, 1000);
+        }, 500); // Reduced from 1000ms to 500ms for faster start
       } else if (rooms[roomCode].status === "ACTIVE" && activeQuizzes[roomCode]) {
         // If game already started, send game start event to the new player
         socket.emit("gameStart");
 
-        // Send quiz questions to the new player
-        setTimeout(() => {
-          socket.emit("quizStart", { questions: activeQuizzes[roomCode] });
-        }, 1000);
+        // Get the current quiz state
+        const currentState = roomTimers[roomCode];
+        
+        if (currentState) {
+          // Get the current question's time limit (default 30 seconds)
+          const currentQuestion = activeQuizzes[roomCode]?.[currentState.currentQuestionIndex] || 
+                                 demoQuestions[currentState.currentQuestionIndex];
+          const fullTimeLimit = currentQuestion.timeLimit || 30;
+          
+          // Calculate elapsed time since question started
+          const timeElapsed = Date.now() - currentState.startTime;
+          const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
+          
+          console.log(`Late-joining player in room ${roomCode}: Question ${currentState.currentQuestionIndex}, Time left: ${Math.ceil(timeLeft / 1000)}s of ${fullTimeLimit}s`);
+          
+          // Send quiz questions to the new player with accurate time information immediately (no delay)
+          socket.emit("quizStart", {
+            questions: activeQuizzes[roomCode],
+            currentQuestionIndex: currentState.currentQuestionIndex,
+            timeLeft: Math.ceil(timeLeft / 1000)
+          });
+        } else {
+          // Fallback if no timer state found
+          socket.emit("quizStart", { 
+            questions: activeQuizzes[roomCode],
+            currentQuestionIndex: 0,
+            timeLeft: 30 // Default to 30 seconds
+          });
+        }
       }
     } else {
       socket.emit("roomError", "Room not found");
@@ -369,8 +413,8 @@ function startQuestionTimer(roomId: string) {
     return;
   }
   
-  // Get the time limit for this question
-  const timeLimit = currentQuestion.timeLimit || 15;
+  // Get the time limit for this question - changed default from 15 to 30 seconds
+  const timeLimit = currentQuestion.timeLimit || 30;
   
   console.log(`Starting timer for question ${currentIndex} in room ${roomId} with time limit ${timeLimit}s`);
   
@@ -381,16 +425,32 @@ function startQuestionTimer(roomId: string) {
     totalQuestions: activeQuizzes[roomId]?.length || demoQuestions.length
   });
   
+  // For the first question, also emit a quizStart event with full question details
+  if (currentIndex === 0) {
+    const questions = activeQuizzes[roomId] || demoQuestions;
+    io.in(roomId).emit("quizStart", {
+      questions: questions,
+      currentQuestionIndex: 0,
+      timeLeft: timeLimit  // Make sure we send the full time limit
+    });
+  }
+  
   // Set the timer to end the question after the time limit
   roomTimers[roomId].timer = setTimeout(() => {
     console.log(`Time's up for question ${currentIndex} in room ${roomId}`);
     handleQuestionEnd(roomId, currentIndex);
   }, timeLimit * 1000);
   
-  // Send time updates every second
+  // Send time updates more frequently (every 500ms) for better synchronization
   let secondsRemaining = timeLimit;
+  let lastUpdateTime = Date.now();
+  
   const timeUpdateInterval = setInterval(() => {
-    secondsRemaining--;
+    const now = Date.now();
+    const elapsed = (now - lastUpdateTime) / 1000;
+    lastUpdateTime = now;
+    
+    secondsRemaining -= elapsed;
     
     if (secondsRemaining <= 0) {
       clearInterval(timeUpdateInterval);
@@ -400,9 +460,12 @@ function startQuestionTimer(roomId: string) {
     // Send time update to all clients
     io.in(roomId).emit("timeUpdate", {
       questionIndex: currentIndex,
-      timeLeft: secondsRemaining
+      timeLeft: Math.ceil(secondsRemaining)
     });
-  }, 1000);
+  }, 500); // Update every 500ms instead of 1000ms for better precision
+  
+  // Store the interval ID so we can clear it later
+  roomTimers[roomId].syncTimerId = timeUpdateInterval;
 }
 
 // Function to clear the question timer
@@ -414,6 +477,12 @@ function clearQuestionTimer(roomId: string) {
   if (currentState.timer) {
     clearTimeout(currentState.timer);
     currentState.timer = null;
+  }
+  
+  // Clear the sync timer
+  if (currentState.syncTimerId) {
+    clearInterval(currentState.syncTimerId);
+    currentState.syncTimerId = null;
   }
 }
 
@@ -641,7 +710,7 @@ async function storeQuizQuestions(roomId: string, questions: any[]) {
       questionText: q.questionText,
       options: q.options,
       correctOption: q.correctOption,
-      timeLimit: q.timeLimit || 15
+      timeLimit: q.timeLimit || 30
     }));
     
     console.log(`Sending ${questionsWithAnswers.length} questions to database for room ${roomId}`);

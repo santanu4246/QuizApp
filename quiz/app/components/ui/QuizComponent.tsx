@@ -37,7 +37,8 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
   // Reset state when question changes
   useEffect(() => {
     setSelectedOption(null);
-    setTimeLeft(initialTimeLeft || question.timeLimit);
+    // Make sure we're always starting with the full time limit
+    setTimeLeft(initialTimeLeft !== undefined ? initialTimeLeft : question.timeLimit);
     setAnswered(false);
   }, [question, initialTimeLeft]);
 
@@ -55,6 +56,7 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
 
     const handleTimeUpdate = (data: { questionIndex: number, timeLeft: number }) => {
       if (data.questionIndex === currentQuestionIndex && !answered) {
+        // Always trust the server time updates for better synchronization
         setTimeLeft(data.timeLeft);
       }
     };
@@ -69,6 +71,7 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
   }, [socket, currentQuestionIndex, answered]);
 
   // Only use local timer as fallback if server updates aren't coming
+  // and with lower priority than server updates
   useEffect(() => {
     // If we've already answered or the timer is up, don't run the local timer
     if (timeLeft <= 0 || answered) return;
@@ -77,14 +80,14 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
     const timer = setTimeout(() => {
       // Only update if we haven't received a server update recently
       setTimeLeft(prev => {
-        const newTime = Math.max(0, prev - 1);
+        const newTime = Math.max(0, prev - 0.5); // Decrease by half a second
         if (newTime <= 0 && !answered) {
           setAnswered(true);
           onAnswer(-1); // -1 indicates no answer was selected
         }
         return newTime;
       });
-    }, 1100); // Slightly longer than server's 1000ms to avoid racing
+    }, 1100); // Slightly longer than server's update frequency to avoid racing
 
     return () => clearTimeout(timer);
   }, [timeLeft, answered, onAnswer]);

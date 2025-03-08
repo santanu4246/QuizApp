@@ -101,7 +101,7 @@ export async function POST(
           gameSessionId: roomId,
           questionId: existingQuestion.id,
           orderIndex: storedQuestions.length,
-          timeLimit: q.timeLimit || 15,
+          timeLimit: q.timeLimit || 30,
           points: 10,
         },
       });

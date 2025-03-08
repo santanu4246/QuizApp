@@ -39,6 +39,9 @@ const QuizSession: React.FC<QuizSessionProps> = ({ roomId }) => {
 
     console.log("Setting up socket listeners for quiz in room:", roomId);
     
+    // Immediately request questions if we're joining a game that might be in progress
+    socket.emit("requestQuizQuestions", roomId);
+    
     // Listen for quiz start event
     socket.on("quizStart", (quizData: { 
       questions: Question[], 
@@ -95,13 +98,24 @@ const QuizSession: React.FC<QuizSessionProps> = ({ roomId }) => {
       // You can use this to show feedback between questions
     });
 
+    // Listen for game start event
+    socket.on("gameStart", () => {
+      console.log("Game started in room:", roomId);
+      // Immediately request the quiz questions as soon as we know the game has started
+      socket.emit("requestQuizQuestions", roomId);
+    });
+
     // Start a timer to track how long we've been waiting
     waitingTimerRef.current = setInterval(() => {
       setWaitingTime(prev => {
-        // If we've been waiting for more than 5 seconds and haven't received questions,
-        // request them directly
-        if (prev === 5 && !quizStarted) {
-          console.log("Requesting quiz questions directly");
+        // Request questions if we've been waiting for 2 seconds
+        if (prev === 2 && !quizStarted) {
+          console.log("Requesting quiz questions after 2 seconds");
+          socket.emit("requestQuizQuestions", roomId);
+        }
+        // Try again if we've been waiting for 5 seconds
+        else if (prev === 5 && !quizStarted) {
+          console.log("Requesting quiz questions again after 5 seconds");
           socket.emit("requestQuizQuestions", roomId);
         }
         return prev + 1;
