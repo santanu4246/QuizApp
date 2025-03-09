@@ -45,7 +45,7 @@ import {
 import axios from "axios";
 import { GameHistoryCard } from "../components/GameHistoryCard";
 import InsufficientCreditsDialog from "../components/ui/InsufficientCreditsDialog";
-const socket = io("https://quiz-app-iota-seven-57.vercel.app");
+const socket = io("https://quizapp-l30d.onrender.com")
 
 // Define interfaces for game history
 interface GameHistoryItem {
@@ -165,7 +165,7 @@ export default function DashboardPage() {
           setGameHistory([]);
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.log("Error fetching user data:", error);
         // Set default empty stats
         setUserStats({
           gamesPlayed: 0,
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         setShowInsufficientCreditsDialog(true);
       } else {
         // Handle other errors
-        console.error("Room error:", error);
+        console.log("Room error:", error);
       }
     });
 
@@ -258,6 +258,7 @@ export default function DashboardPage() {
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-main ">
