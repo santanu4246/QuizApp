@@ -27,28 +27,64 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
-
+    
+    // Check if user has enough credits
+    if (hostUser.credits < 1) {
+      return NextResponse.json(
+        { error: "Insufficient credits", 
+          details: "You need at least 1 credit to create a room" 
+        },
+        { status: 403 }
+      );
+    }
+    
     // Create the room in the database
-    const room = await prisma.room.create({
-      data: {
-        id: roomId,
-        status: "WAITING",
-        maxParticipants: Number(playerCount),
-        roomTimeLimit: Number(roomTimeLimit),
-        questionCount: Number(questionCount),
-        difficulty: difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD" | "EXPERT",
-        quizTopic: topic,
-        duration: 0,
-        hostId: user,
-        participants: {
-          create: [{
-            userId: user,
-          }]
+    const room = await prisma.$transaction(async (prisma) => {
+      // Deduct 1 credit from user
+      const updatedUser = await prisma.user.update({
+        where: { id: user },
+        data: { 
+          credits: { decrement: 1 } 
+        },
+      });
+      
+      // Record credit transaction
+      await prisma.creditTransaction.create({
+        data: {
+          userId: user,
+          amount: -1,
+          type: "GAME_HOST",
+          roomId: roomId,
+          description: `Created room ${roomId} for topic ${topic}`
         }
-      },
+      });
+      
+      // Create the room
+      return await prisma.room.create({
+        data: {
+          id: roomId,
+          status: "WAITING",
+          maxParticipants: Number(playerCount),
+          roomTimeLimit: Number(roomTimeLimit),
+          questionCount: Number(questionCount),
+          difficulty: difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD" | "EXPERT",
+          quizTopic: topic,
+          duration: 0,
+          hostId: user,
+          participants: {
+            create: [{
+              userId: user,
+            }]
+          }
+        },
+      });
     });
 
-    return NextResponse.json({ message: "Room created successfully", room });
+    return NextResponse.json({ 
+      message: "Room created successfully", 
+      room,
+      creditsRemaining: hostUser.credits - 1
+    });
   } catch (error: unknown) {
     console.error("Error creating room:", error);
 

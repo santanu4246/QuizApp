@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import { useSocketStore } from "@/store/socketStore";
 import axios from "axios";
 import WaitingCard from "@/app/components/ui/WaitingCard";
+import QuizSession from "@/app/components/ui/QuizSession";
+import { useSession } from "next-auth/react";
 
 interface RoomDetails {
   id: string;
@@ -15,6 +17,7 @@ interface RoomDetails {
     id: string;
     username: string;
   }>;
+  status: string;
 }
 
 const Page = () => {
@@ -24,6 +27,8 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { socket } = useSocketStore();
+  const [gameStarted, setGameStarted] = useState(false);
+  const { data: session } = useSession();
 
   const fetchRoomDetails = async () => {
     if (!roomId) {
@@ -35,7 +40,14 @@ const Page = () => {
     try {
       const response = await axios.get(`/api/room/${roomId}`);
       setRoomDetails(response.data);
-      console.log(response.data);
+      
+      // Check if game has already started
+      if (response.data.status === "ACTIVE") {
+        console.log("Room is already active, setting game started");
+        setGameStarted(true);
+      }
+      
+      console.log("Room details:", response.data);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
@@ -49,7 +61,7 @@ const Page = () => {
     fetchRoomDetails();
 
     if (!socket) {
-      // console.error("Socket not initialized");
+      console.error("Socket not initialized");
       return;
     }
 
@@ -57,6 +69,18 @@ const Page = () => {
     socket.on("updatePlayers", (updatedRoom: RoomDetails) => {
       console.log("Received room update:", updatedRoom);
       setRoomDetails(updatedRoom);
+      
+      // If room status is ACTIVE, set game started
+      if (updatedRoom.status === "ACTIVE") {
+        console.log("Room status is now ACTIVE, setting game started");
+        setGameStarted(true);
+      }
+    });
+
+    // Listen for game start
+    socket.on("gameStart", () => {
+      console.log("Game started event received!");
+      setGameStarted(true);
     });
 
     // Listen for room errors
@@ -66,9 +90,20 @@ const Page = () => {
 
     return () => {
       socket.off("updatePlayers");
+      socket.off("gameStart");
       socket.off("roomError");
     };
   }, [roomId, socket]);
+
+  // If room is full and we're not in game yet, check status
+  useEffect(() => {
+    if (roomDetails && 
+        roomDetails.currentParticipants === roomDetails.maxParticipants && 
+        !gameStarted) {
+      console.log("Room is full but game not started, setting game started");
+      setGameStarted(true);
+    }
+  }, [roomDetails, gameStarted]);
 
   if (isLoading) {
     return (
@@ -96,12 +131,16 @@ const Page = () => {
 
   return (
     <div className="h-screen bg-main text-white flex items-center justify-center">
-      <WaitingCard
-        roomId={roomDetails.id}
-        currentPlayers={roomDetails.currentParticipants}
-        maxPlayers={roomDetails.maxParticipants}
-        participants={roomDetails.participants}
-      />
+      {gameStarted ? (
+        <QuizSession roomId={roomDetails.id} />
+      ) : (
+        <WaitingCard
+          roomId={roomDetails.id}
+          currentPlayers={roomDetails.currentParticipants}
+          maxPlayers={roomDetails.maxParticipants}
+          participants={roomDetails.participants}
+        />
+      )}
     </div>
   );
 };
