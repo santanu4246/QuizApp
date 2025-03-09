@@ -9,7 +9,7 @@ const FeatureSection: React.FC<FeatureSectionProps> = ({
   imageAlt = "Dashboard Preview",
 }) => {
   return (
-    <div className="w-full h-full max-w-4xl mx-auto p-4 relative py-12">
+    <div className="w-full h-full max-w-4xl mx-auto p-4 relative py-12 mt-36 md:mt-0">
       {/* Background gradient for enhanced glass effect */}
       <div className="absolute  inset-0 bg-gradient-to-r from-blue-500/30 via-purple-500/30 to-pink-500/30 blur-3xl -z-10" />
 

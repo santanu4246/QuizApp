@@ -65,7 +65,7 @@ export async function POST(
             hostId: participants[0]?.id || "unknown",
             createdAt: new Date(),
             updatedAt: new Date(),
-            completedAt: completedAt ? new Date(completedAt) : new Date()
+            // completedAt: completedAt ? new Date(completedAt) : new Date()
           }
         });
         console.log(`Created minimal room record for ${roomId}`);
@@ -75,7 +75,7 @@ export async function POST(
           where: { id: roomId },
           data: {
             status: "FINISHED",
-            completedAt: completedAt ? new Date(completedAt) : new Date()
+            // completedAt: completedAt ? new Date(completedAt) : new Date()
           }
         });
         console.log(`Updated room ${roomId} status to FINISHED`);
@@ -236,7 +236,7 @@ export async function GET(
       roomId: room.id,
       status: room.status,
       participantCount: roomParticipants.length,
-      completedAt: room.completedAt,
+      // completedAt: room.completedAt,
       participants: roomParticipants.map(p => ({
         id: p.userId,
         name: p.user?.name || "Unknown",
