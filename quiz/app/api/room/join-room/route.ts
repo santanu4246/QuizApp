@@ -17,8 +17,19 @@ export async function POST(req: NextRequest) {
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    
+    // 2. Check if the user has enough credits
+    if (existingUser.credits < 1) {
+      return NextResponse.json(
+        { 
+          error: "Insufficient credits", 
+          details: "You need at least 1 credit to join a room"
+        }, 
+        { status: 403 }
+      );
+    }
 
-    // 2. Find the room by its ID, including its current participants
+    // 3. Find the room by its ID, including its current participants
     const room = await prisma.room.findUnique({
       where: { id: roomId },
       include: { participants: true },
@@ -27,12 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
-    // 3. Check if the room is full
+    // 4. Check if the room is full
     if (room.participants.length >= room.maxParticipants) {
       return NextResponse.json({ error: "Room is full" }, { status: 400 });
     }
 
-    // 4. Check if the user is already a participant in the room
+    // 5. Check if the user is already a participant in the room
     const alreadyJoined = room.participants.some(
       (participant) => participant.userId === user
     );
@@ -43,20 +54,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updatedRoom = await prisma.room.update({
-      where: { id: roomId },
-      data: {
-        participants: {
-          create: {
-            user: { connect: { id: user } },
+    // 6. Use transaction to update user credits and add them to the room
+    const result = await prisma.$transaction(async (prisma) => {
+      // Deduct 1 credit from user
+      const updatedUser = await prisma.user.update({
+        where: { id: user },
+        data: { 
+          credits: { decrement: 1 } 
+        },
+      });
+      
+      // Record credit transaction
+      await prisma.creditTransaction.create({
+        data: {
+          userId: user,
+          amount: -1,
+          type: "GAME_JOIN",
+          roomId: roomId,
+          description: `Joined room ${roomId}`
+        }
+      });
+      
+      // Add user to room
+      const updatedRoom = await prisma.room.update({
+        where: { id: roomId },
+        data: {
+          participants: {
+            create: {
+              user: { connect: { id: user } },
+            },
           },
         },
-      },
+      });
+      
+      return { updatedRoom, creditsRemaining: updatedUser.credits };
     });
 
     return NextResponse.json({
       message: "Joined room successfully",
-      updatedRoom,
+      updatedRoom: result.updatedRoom,
+      creditsRemaining: result.creditsRemaining
     });
   } catch (error: unknown) {
     // Safely extract an error message from the caught error.
