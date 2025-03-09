@@ -11,6 +11,7 @@ import {
   Clock,
   Users2,
   Loader2,
+  CreditCard,
 } from "lucide-react";
 
 import { SignOutButton } from "../components/auth/SignOutButton";
@@ -43,6 +44,7 @@ import {
 } from "../components/ui/tabs";
 import axios from "axios";
 import { GameHistoryCard } from "../components/GameHistoryCard";
+import InsufficientCreditsDialog from "../components/ui/InsufficientCreditsDialog";
 const socket = io("http://localhost:3001");
 
 // Define interfaces for game history
@@ -91,6 +93,8 @@ export default function DashboardPage() {
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [showInsufficientCreditsDialog, setShowInsufficientCreditsDialog] = useState(false);
+  const [userCredits, setUserCredits] = useState<number>(0);
 
   const handleChange = (
     key: keyof typeof inputedData,
@@ -133,6 +137,11 @@ export default function DashboardPage() {
         if (statsResponse.data) {
           console.log("User stats received:", statsResponse.data);
           setUserStats(statsResponse.data);
+          
+          // Set user credits if available in the stats
+          if (statsResponse.data.credits !== undefined) {
+            setUserCredits(statsResponse.data.credits);
+          }
         } else {
           console.warn("No user stats data received from API");
           // Fallback stats if API doesn't return data
@@ -175,6 +184,27 @@ export default function DashboardPage() {
     
     fetchGameHistory();
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    socket.on("roomError", (error) => {
+      setIsLoading(false);
+      setIsJoining(false);
+      
+      // Check if it's a credit-related error
+      if (typeof error === 'object' && error.error === "Insufficient credits") {
+        setShowInsufficientCreditsDialog(true);
+      } else if (typeof error === 'string' && error.includes("credit")) {
+        setShowInsufficientCreditsDialog(true);
+      } else {
+        // Handle other errors
+        console.error("Room error:", error);
+      }
+    });
+
+    return () => {
+      socket.off("roomError");
+    };
+  }, []);
 
   function handleCreateRoom() {
     if (
@@ -241,6 +271,10 @@ export default function DashboardPage() {
               <span className="text-blue-400">
                 {session?.user?.name || "Player"}
               </span>
+              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                <CreditCard className="w-3 h-3 mr-1" />
+                {userCredits} {userCredits === 1 ? "Credit" : "Credits"}
+              </span>
             </p>
           </div>
           <SignOutButton />
@@ -277,6 +311,8 @@ export default function DashboardPage() {
                       <SelectItem value="general">General Knowledge</SelectItem>
                       <SelectItem value="science">Science</SelectItem>
                       <SelectItem value="history">History</SelectItem>
+                      <SelectItem value="Javascript">Javascript</SelectItem>
+                      <SelectItem value="Typescript">Typescript</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -546,6 +582,11 @@ export default function DashboardPage() {
           </Tabs>
         </Card>
       </div>
+      {/* Insufficient Credits Dialog */}
+      <InsufficientCreditsDialog 
+        open={showInsufficientCreditsDialog} 
+        onClose={() => setShowInsufficientCreditsDialog(false)} 
+      />
     </div>
   );
 }

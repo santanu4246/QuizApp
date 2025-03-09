@@ -27,6 +27,7 @@ export async function GET(
         draws: true,
         winRate: true,
         totalPoints: true,
+        credits: true,
       },
     });
 
@@ -43,7 +44,8 @@ export async function GET(
           losses: 0,
           draws: 0,
           winRate: 0,
-          totalPoints: 0
+          totalPoints: 0,
+          credits: 1 // Default credits for new user
         },
         select: {
           id: true,
@@ -54,6 +56,7 @@ export async function GET(
           draws: true,
           winRate: true,
           totalPoints: true,
+          credits: true,
         }
       });
     }
@@ -149,7 +152,8 @@ export async function GET(
         losses,
         draws,
         winRate,
-        totalPoints
+        totalPoints,
+        credits: user.credits || 0 // Include credits in response
       });
       
     } catch (recalcError) {
@@ -158,7 +162,17 @@ export async function GET(
     }
 
     // Return current stats from database if recalculation failed
-    return NextResponse.json(user);
+    return NextResponse.json({
+      id: params.userId,
+      name: "Player", 
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      winRate: 0,
+      totalPoints: 0,
+      credits: 0 // Include default 0 credits in error response
+    });
     
   } catch (error) {
     console.error("Error fetching user stats:", error);
@@ -171,7 +185,8 @@ export async function GET(
       losses: 0,
       draws: 0,
       winRate: 0,
-      totalPoints: 0
+      totalPoints: 0,
+      credits: 0 // Include default 0 credits in error response
     });
   }
 } 

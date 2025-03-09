@@ -147,10 +147,25 @@ io.on("connection", (socket) => {
         }]
       };
 
-      const result = await createRoomData(roomId, { ...msg, user: msg.user });
-      socket.join(roomId);
-      socket.emit("roomId", roomId);
-      io.in(roomId).emit("updatePlayers", rooms[roomId]);
+      try {
+        const result = await createRoomData(roomId, { ...msg, user: msg.user });
+        socket.join(roomId);
+        socket.emit("roomId", roomId);
+        io.in(roomId).emit("updatePlayers", rooms[roomId]);
+      } catch (error) {
+        // Remove the room if the API call failed
+        delete rooms[roomId];
+        
+        // Check for credit-related errors
+        if (error instanceof Error && error.message.includes("credit")) {
+          socket.emit("roomError", { 
+            error: "Insufficient credits", 
+            details: "You need at least 1 credit to create a room" 
+          });
+        } else {
+          socket.emit("roomError", error instanceof Error ? error.message : "Failed to create room");
+        }
+      }
     } catch (error) {
       socket.emit("roomError", error instanceof Error ? error.message : "Failed to create room");
     }
@@ -166,95 +181,109 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Add new participant
-      rooms[roomCode].participants.push({
-        id: user,
-        username: username || 'Anonymous'
-      });
-      rooms[roomCode].currentParticipants = rooms[roomCode].participants.length;
-
-      await joinRoom(roomCode, user);
-      socket.join(roomCode);
-
-      // Emit updated room data to all clients in the room
-      io.in(roomCode).emit("updatePlayers", rooms[roomCode]);
-      socket.emit("roomId", roomCode);
-
-      // Check if room is now full and start the game
-      if (rooms[roomCode].participants.length === rooms[roomCode].maxParticipants) {
-        // If room is full, update status to ACTIVE
-        rooms[roomCode].status = "ACTIVE";
-        io.in(roomCode).emit("updatePlayers", rooms[roomCode]);
-
-        // Notify all clients that game has started
-        io.in(roomCode).emit("gameStart");
-
-        // Start the quiz with a minimal delay to ensure all clients have received the gameStart event
-        setTimeout(() => {
-          startQuiz(roomCode);
-        }, 500); // Reduced from 1000ms to 500ms for faster start
-      } else if (rooms[roomCode].status === "ACTIVE" && activeQuizzes[roomCode]) {
-        // If game already started, send game start event to the new player
-        socket.emit("gameStart");
-
-        // Get the current quiz state
-        const currentState = roomTimers[roomCode];
+      try {
+        // Try to join the room via API (which will check for credits)
+        await joinRoom(roomCode, user);
         
-        if (currentState) {
-          // Get the current question's time limit (default 30 seconds)
-          if (!activeQuizzes[roomCode] || !activeQuizzes[roomCode][currentState.currentQuestionIndex]) {
-            console.error(`Question not found for room ${roomCode} at index ${currentState.currentQuestionIndex}`);
+        // If successful, add to room participants
+        rooms[roomCode].participants.push({
+          id: user,
+          username: username || 'Anonymous'
+        });
+        rooms[roomCode].currentParticipants = rooms[roomCode].participants.length;
+
+        socket.join(roomCode);
+
+        // Emit updated room data to all clients in the room
+        io.in(roomCode).emit("updatePlayers", rooms[roomCode]);
+        socket.emit("roomId", roomCode);
+        
+        // Check if room is now full and start the game
+        if (rooms[roomCode].participants.length === rooms[roomCode].maxParticipants) {
+          // If room is full, update status to ACTIVE
+          rooms[roomCode].status = "ACTIVE";
+          io.in(roomCode).emit("updatePlayers", rooms[roomCode]);
+
+          // Notify all clients that game has started
+          io.in(roomCode).emit("gameStart");
+
+          // Start the quiz with a minimal delay to ensure all clients have received the gameStart event
+          setTimeout(() => {
+            startQuiz(roomCode);
+          }, 500); // Reduced from 1000ms to 500ms for faster start
+        } else if (rooms[roomCode].status === "ACTIVE" && activeQuizzes[roomCode]) {
+          // If game already started, send game start event to the new player
+          socket.emit("gameStart");
+
+          // Get the current quiz state
+          const currentState = roomTimers[roomCode];
+          
+          if (currentState) {
+            // Get the current question's time limit (default 30 seconds)
+            if (!activeQuizzes[roomCode] || !activeQuizzes[roomCode][currentState.currentQuestionIndex]) {
+              console.error(`Question not found for room ${roomCode} at index ${currentState.currentQuestionIndex}`);
+              
+              // Generate a temporary placeholder question
+              const placeholderQuestion = {
+                id: `placeholder-q${currentState.currentQuestionIndex}`,
+                questionText: `Question ${currentState.currentQuestionIndex + 1} (Placeholder)`,
+                options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+                correctOption: 0,
+                timeLimit: 30,
+                difficulty: "MEDIUM"
+              };
+              
+              // Use the placeholder
+              const fullTimeLimit = 30;
+              
+              // Calculate elapsed time since question started
+              const timeElapsed = Date.now() - currentState.startTime;
+              const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
+              
+              console.log(`Late-joining player in room ${roomCode}: Using placeholder question, Time left: ${Math.ceil(timeLeft / 1000)}s`);
+              
+              socket.emit("quizStart", {
+                questions: [placeholderQuestion],
+                currentQuestionIndex: 0,
+                timeLeft: Math.ceil(timeLeft / 1000)
+              });
+              
+              return;
+            }
             
-            // Generate a temporary placeholder question
-            const placeholderQuestion = {
-              id: `placeholder-q${currentState.currentQuestionIndex}`,
-              questionText: `Question ${currentState.currentQuestionIndex + 1} (Placeholder)`,
-              options: ["Option 1", "Option 2", "Option 3", "Option 4"],
-              correctOption: 0,
-              timeLimit: 30,
-              difficulty: "MEDIUM"
-            };
-            
-            // Use the placeholder
-            const fullTimeLimit = 30;
+            const currentQuestion = activeQuizzes[roomCode][currentState.currentQuestionIndex];
+            const fullTimeLimit = currentQuestion.timeLimit || 30;
             
             // Calculate elapsed time since question started
             const timeElapsed = Date.now() - currentState.startTime;
             const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
             
-            console.log(`Late-joining player in room ${roomCode}: Using placeholder question, Time left: ${Math.ceil(timeLeft / 1000)}s`);
+            console.log(`Late-joining player in room ${roomCode}: Question ${currentState.currentQuestionIndex}, Time left: ${Math.ceil(timeLeft / 1000)}s of ${fullTimeLimit}s`);
             
+            // Send quiz questions to the new player with accurate time information immediately (no delay)
             socket.emit("quizStart", {
-              questions: [placeholderQuestion],
-              currentQuestionIndex: 0,
+              questions: activeQuizzes[roomCode],
+              currentQuestionIndex: currentState.currentQuestionIndex,
               timeLeft: Math.ceil(timeLeft / 1000)
             });
-            
-            return;
+          } else {
+            // Fallback if no timer state found
+            socket.emit("quizStart", { 
+              questions: activeQuizzes[roomCode],
+              currentQuestionIndex: 0,
+              timeLeft: 30 // Default to 30 seconds
+            });
           }
-          
-          const currentQuestion = activeQuizzes[roomCode][currentState.currentQuestionIndex];
-          const fullTimeLimit = currentQuestion.timeLimit || 30;
-          
-          // Calculate elapsed time since question started
-          const timeElapsed = Date.now() - currentState.startTime;
-          const timeLeft = Math.max(0, fullTimeLimit * 1000 - timeElapsed);
-          
-          console.log(`Late-joining player in room ${roomCode}: Question ${currentState.currentQuestionIndex}, Time left: ${Math.ceil(timeLeft / 1000)}s of ${fullTimeLimit}s`);
-          
-          // Send quiz questions to the new player with accurate time information immediately (no delay)
-          socket.emit("quizStart", {
-            questions: activeQuizzes[roomCode],
-            currentQuestionIndex: currentState.currentQuestionIndex,
-            timeLeft: Math.ceil(timeLeft / 1000)
+        }
+      } catch (error) {
+        // Handle credit errors specially
+        if (error instanceof Error && error.message.includes("credit")) {
+          socket.emit("roomError", { 
+            error: "Insufficient credits", 
+            details: "You need at least 1 credit to join a room" 
           });
         } else {
-          // Fallback if no timer state found
-          socket.emit("quizStart", { 
-            questions: activeQuizzes[roomCode],
-            currentQuestionIndex: 0,
-            timeLeft: 30 // Default to 30 seconds
-          });
+          socket.emit("roomError", error instanceof Error ? error.message : "Failed to join room");
         }
       }
     } else {
@@ -297,9 +326,6 @@ io.on("connection", (socket) => {
     quizResults[roomId][userId].score += points;
     
     // Store the answer
-    quizResults[roomId][userId].answers[questionIndex] = selectedOption;
-    
-    // Store the answer in the database
     storeQuestionAnswers(roomId, questionIndex, selectedOption, userId, isCorrect);
     
     // Send feedback to the user

@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const { roomId } = await params;
+    const { roomId } = params;
     const body = await req.json();
     const { questionIndex, answers } = body;
     console.log("Processing answers for room:", roomId, "question:", questionIndex, "answers:", JSON.stringify(answers).substring(0, 200));
@@ -29,7 +29,7 @@ export async function POST(
         await prisma.room.create({
           data: {
             id: roomId,
-            status: "ACTIVE",
+            status: "WAITING",
             maxParticipants: 2,
             roomTimeLimit: 300,
             questionCount: 5,
@@ -108,7 +108,6 @@ export async function POST(
     for (const answer of answers) {
       try {
         // Ensure the participant exists
-        let participantExists = false;
         try {
           const roomParticipant = await prisma.roomParticipant.findFirst({
             where: {
@@ -117,9 +116,7 @@ export async function POST(
             }
           });
           
-          if (roomParticipant) {
-            participantExists = true;
-          } else {
+          if (!roomParticipant) {
             // Create the participant if not found
             await prisma.roomParticipant.create({
               data: {
@@ -127,7 +124,6 @@ export async function POST(
                 roomId: roomId
               }
             });
-            participantExists = true;
             console.log(`Created room participant for user ${answer.participantId} in room ${roomId}`);
           }
         } catch (participantError) {

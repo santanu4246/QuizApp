@@ -34,8 +34,23 @@ export async function joinRoom(roomId: string, user: string) {
       }
     );
     console.log(response.data);
+    return response.data;
   } catch (error) {
-    console.log(error);
+    // Forward credit-related errors properly
+    if (axios.isAxiosError(error)) {
+      const errorData = error.response?.data;
+      
+      // Check for credit error specifically
+      if (errorData?.error === "Insufficient credits") {
+        throw new Error("Insufficient credits: You need at least 1 credit to join a room");
+      }
+      
+      // Pass through other error details
+      throw new Error(errorData?.details || errorData?.error || error.message);
+    }
+    
+    // For non-axios errors, re-throw as is
+    throw error;
   }
 }
 

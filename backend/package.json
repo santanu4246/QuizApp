@@ -4,6 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
+    "build":"tsc -b",
     "dev": "tsc -b && nodemon ./src/server.ts"
   },
   "keywords": [],
