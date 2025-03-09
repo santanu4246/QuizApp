@@ -8,13 +8,13 @@ export async function middleware(request: NextRequest) {
     req: request,
     secret: process.env.NEXTAUTH_SECRET
   });
-  // console.log("Middleware token details:", {
-  //   path: request.nextUrl.pathname,
-  //   hasToken: !!token,
-  //   tokenContent: token ? 'Token exists' : 'No token',
-  //   cookies: request.cookies.getAll(),
-  // })
-  // console.log("------------------------------");
+  console.log("Middleware token details:", {
+    path: request.nextUrl.pathname,
+    hasToken: !!token,
+    tokenContent: token ? 'Token exists' : 'No token',
+    cookies: request.cookies.getAll(),
+  })
+  console.log("------------------------------");
 
   const { pathname } = request.nextUrl;
 
