@@ -45,7 +45,7 @@ import {
 import axios from "axios";
 import { GameHistoryCard } from "../components/GameHistoryCard";
 import InsufficientCreditsDialog from "../components/ui/InsufficientCreditsDialog";
-const socket = io("http://localhost:3001");
+const socket = io("https://quiz-app-iota-seven-57.vercel.app");
 
 // Define interfaces for game history
 interface GameHistoryItem {
