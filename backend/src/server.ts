@@ -716,7 +716,7 @@ async function updateRoomStatus(roomId: string, status: string) {
     // Try PUT method first
     try {
       const response = await axios.put(
-        `http://localhost:3000/api/room/${roomId}/status`,
+        `https://quizsync4246.vercel.app/api/room/${roomId}/status`,
         {
           status
         },
@@ -735,7 +735,7 @@ async function updateRoomStatus(roomId: string, status: string) {
         
         try {
           const response = await axios.post(
-            `http://localhost:3000/api/room/${roomId}/status`,
+            `https://quizsync4246.vercel.app/api/room/${roomId}/status`,
             {
               status
             },
@@ -811,7 +811,7 @@ async function storeQuizQuestions(roomId: string, questions: any[]) {
     
     console.log(`Sending ${questionsWithAnswers.length} questions to database for room ${roomId}`);
     
-    const response = await axios.post(`http://localhost:3000/api/room/${roomId}/questions`, {
+    const response = await axios.post(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`, {
       questions: questionsWithAnswers
     }, {
       headers: {
@@ -899,7 +899,7 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
       // First check if questions exist for this room
       let questionsExist = false;
       try {
-        const questionsResponse = await axios.get(`http://localhost:3000/api/room/${roomId}/questions`);
+        const questionsResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`);
         const existingQuestions = questionsResponse.data.questions;
         questionsExist = existingQuestions && existingQuestions.length > questionIndex;
         
@@ -930,7 +930,7 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
           answerTime: Math.floor(new Date().getTime() / 1000) // Convert to seconds
         }));
         
-        const response = await axios.post(`http://localhost:3000/api/room/${roomId}/answers`, {
+        const response = await axios.post(`https://quizsync4246.vercel.app/api/room/${roomId}/answers`, {
           questionIndex,
           answers: answerWithSeconds
         });
@@ -1019,7 +1019,7 @@ async function storeQuizResults(roomId: string, results: any) {
         try {
           // Store results in database with increased timeout
           const response = await axios.post(
-            `http://localhost:3000/api/room/${roomId}/results`,
+            `https://quizsync4246.vercel.app/api/room/${roomId}/results`,
             simplifiedData,
             {
               headers: {
@@ -1090,7 +1090,7 @@ async function ensureApiRoutesExist(roomId: string) {
     
     // Check if the room exists in the database
     try {
-      const roomResponse = await axios.get(`http://localhost:3000/api/room/${roomId}`);
+      const roomResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}`);
       console.log(`Room ${roomId} exists in database`);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -1116,7 +1116,7 @@ async function ensureApiRoutesExist(roomId: string) {
     
     // Check if questions exist for this room
     try {
-      const questionsResponse = await axios.get(`http://localhost:3000/api/room/${roomId}/questions`);
+      const questionsResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`);
       const existingQuestions = questionsResponse.data.questions;
       
       if (!existingQuestions || existingQuestions.length === 0) {

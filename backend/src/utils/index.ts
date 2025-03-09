@@ -4,7 +4,7 @@ import axios from "axios";
 export async function createRoomData(roomId: string, roomData: RoomType) {
   try {
     const response = await axios.post(
-      "http://localhost:3000/api/room/create-room",
+      "https://quizsync4246.vercel.app/api/room/create-room",
       {
         roomId,
         roomData,
@@ -27,7 +27,7 @@ export async function createRoomData(roomId: string, roomData: RoomType) {
 export async function joinRoom(roomId: string, user: string) {
   try {
     const response = await axios.post(
-      "http://localhost:3000/api/room/join-room",
+      "https://quizsync4246.vercel.app/api/room/join-room",
       {
         roomId,
         user,
@@ -76,7 +76,7 @@ export async function storeQuizResults(roomId: string, results: any) {
     };
     
     const response = await axios.post(
-      `http://localhost:3000/api/room/${roomId}/results`,
+      `https://quizsync4246.vercel.app/api/room/${roomId}/results`,
       formattedResults,
       {
         headers: {
