@@ -312,8 +312,10 @@ export default function DashboardPage() {
                       <SelectItem value="general">General Knowledge</SelectItem>
                       <SelectItem value="science">Science</SelectItem>
                       <SelectItem value="history">History</SelectItem>
-                      <SelectItem value="Javascript">Javascript</SelectItem>
-                      <SelectItem value="Typescript">Typescript</SelectItem>
+                      <SelectItem value="javascript">Javascript</SelectItem>
+                      <SelectItem value="typescript">Typescript</SelectItem>
+                       <SelectItem value="react">React</SelectItem>
+                      <SelectItem value="riddle">Riddle</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
