@@ -13,7 +13,7 @@ const io = new Server(server, {
     origin: "*",
   },
 });
-
+const BASE_URL = process.env.BASE_URL;
 // Enhanced room type to match client expectations
 interface EnhancedRoomData {
   id: string;
@@ -361,7 +361,7 @@ io.on("connection", (socket) => {
 });
 
 // Function to start a quiz for a room
-function startQuiz(roomId: string) {
+export function startQuiz(roomId: string) {
   console.log(`Starting quiz for room ${roomId}`);
   
   // Check if the room exists
@@ -456,7 +456,7 @@ function startQuiz(roomId: string) {
 }
 
 // Function to generate placeholder questions when Gemini API fails
-function generatePlaceholderQuestions(topic: string, count: number, difficulty: string): any[] {
+export function generatePlaceholderQuestions(topic: string, count: number, difficulty: string): any[] {
   console.log(`Generating ${count} placeholder questions about ${topic} due to API failure`);
   
   const questions = [];
@@ -480,7 +480,7 @@ function generatePlaceholderQuestions(topic: string, count: number, difficulty: 
 }
 
 // Function to start the timer for a question
-function startQuestionTimer(roomId: string) {
+export function startQuestionTimer(roomId: string) {
   // Clear any existing timer
   clearQuestionTimer(roomId);
   
@@ -569,7 +569,7 @@ function startQuestionTimer(roomId: string) {
 }
 
 // Function to clear the question timer
-function clearQuestionTimer(roomId: string) {
+export function clearQuestionTimer(roomId: string) {
   const currentState = roomTimers[roomId];
   if (!currentState) return;
   
@@ -587,7 +587,7 @@ function clearQuestionTimer(roomId: string) {
 }
 
 // Function to handle the end of a question
-function handleQuestionEnd(roomId: string, questionIndex: number) {
+export function handleQuestionEnd(roomId: string, questionIndex: number) {
   // Get the current question
   if (!activeQuizzes[roomId] || !activeQuizzes[roomId][questionIndex]) {
     console.error(`Question not found for room ${roomId} at index ${questionIndex}`);
@@ -633,7 +633,7 @@ function handleQuestionEnd(roomId: string, questionIndex: number) {
 }
 
 // Function to end the quiz and calculate final results
-function endQuiz(roomId: string) {
+export function endQuiz(roomId: string) {
   const room = rooms[roomId];
   if (!room) {
     console.error(`Room ${roomId} not found when ending quiz`);
@@ -704,7 +704,7 @@ function endQuiz(roomId: string) {
 }
 
 // Function to update room status in database
-async function updateRoomStatus(roomId: string, status: string) {
+export async function updateRoomStatus(roomId: string, status: string) {
   try {
     console.log(`update ${roomId} ${status}`);
     
@@ -716,7 +716,7 @@ async function updateRoomStatus(roomId: string, status: string) {
     // Try PUT method first
     try {
       const response = await axios.put(
-        `https://quizsync4246.vercel.app/api/room/${roomId}/status`,
+        `${BASE_URL}/api/room/${roomId}/status`,
         {
           status
         },
@@ -735,7 +735,7 @@ async function updateRoomStatus(roomId: string, status: string) {
         
         try {
           const response = await axios.post(
-            `https://quizsync4246.vercel.app/api/room/${roomId}/status`,
+            `${BASE_URL}/api/room/${roomId}/status`,
             {
               status
             },
@@ -796,7 +796,7 @@ async function updateRoomStatus(roomId: string, status: string) {
 }
 
 // Function to store quiz questions in database
-async function storeQuizQuestions(roomId: string, questions: any[]) {
+export async function storeQuizQuestions(roomId: string, questions: any[]) {
   console.log('Storing questions for room:', roomId);
   
   try {
@@ -811,7 +811,7 @@ async function storeQuizQuestions(roomId: string, questions: any[]) {
     
     console.log(`Sending ${questionsWithAnswers.length} questions to database for room ${roomId}`);
     
-    const response = await axios.post(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`, {
+    const response = await axios.post(`${BASE_URL}/api/room/${roomId}/questions`, {
       questions: questionsWithAnswers
     }, {
       headers: {
@@ -852,7 +852,7 @@ async function storeQuizQuestions(roomId: string, questions: any[]) {
 }
 
 // Function to store question answers in database
-async function storeQuestionAnswers(roomId: string, questionIndex: number, selectedOption: number, userId: string, isCorrect: boolean) {
+export async function storeQuestionAnswers(roomId: string, questionIndex: number, selectedOption: number, userId: string, isCorrect: boolean) {
   try {
     // Check if the room still exists and is not already finished
     const room = rooms[roomId];
@@ -899,7 +899,7 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
       // First check if questions exist for this room
       let questionsExist = false;
       try {
-        const questionsResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`);
+        const questionsResponse = await axios.get(`${BASE_URL}/api/room/${roomId}/questions`);
         const existingQuestions = questionsResponse.data.questions;
         questionsExist = existingQuestions && existingQuestions.length > questionIndex;
         
@@ -930,7 +930,7 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
           answerTime: Math.floor(new Date().getTime() / 1000) // Convert to seconds
         }));
         
-        const response = await axios.post(`https://quizsync4246.vercel.app/api/room/${roomId}/answers`, {
+        const response = await axios.post(`${BASE_URL}/api/room/${roomId}/answers`, {
           questionIndex,
           answers: answerWithSeconds
         });
@@ -976,7 +976,7 @@ async function storeQuestionAnswers(roomId: string, questionIndex: number, selec
 }
 
 // Function to store quiz results in database
-async function storeQuizResults(roomId: string, results: any) {
+export async function storeQuizResults(roomId: string, results: any) {
   try {
     // Clean and format results for API
     const formattedResults = Object.entries(results).map(([userId, userData]: [string, any]) => {
@@ -1019,7 +1019,7 @@ async function storeQuizResults(roomId: string, results: any) {
         try {
           // Store results in database with increased timeout
           const response = await axios.post(
-            `https://quizsync4246.vercel.app/api/room/${roomId}/results`,
+            `${BASE_URL}/api/room/${roomId}/results`,
             simplifiedData,
             {
               headers: {
@@ -1084,13 +1084,13 @@ async function storeQuizResults(roomId: string, results: any) {
 }
 
 // Function to check if the necessary API routes exist and handle the fallback
-async function ensureApiRoutesExist(roomId: string) {
+export async function ensureApiRoutesExist(roomId: string) {
   try {
     console.log(`Checking API endpoints for room ${roomId}`);
     
     // Check if the room exists in the database
     try {
-      const roomResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}`);
+      const roomResponse = await axios.get(`${BASE_URL}/api/room/${roomId}`);
       console.log(`Room ${roomId} exists in database`);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -1116,7 +1116,7 @@ async function ensureApiRoutesExist(roomId: string) {
     
     // Check if questions exist for this room
     try {
-      const questionsResponse = await axios.get(`https://quizsync4246.vercel.app/api/room/${roomId}/questions`);
+      const questionsResponse = await axios.get(`${BASE_URL}/api/room/${roomId}/questions`);
       const existingQuestions = questionsResponse.data.questions;
       
       if (!existingQuestions || existingQuestions.length === 0) {

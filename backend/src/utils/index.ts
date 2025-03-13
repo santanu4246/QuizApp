@@ -1,10 +1,10 @@
 import { RoomType } from "../types/types";
 import axios from "axios";
-
+const BASE_URL = process.env.BASE_URL;
 export async function createRoomData(roomId: string, roomData: RoomType) {
   try {
     const response = await axios.post(
-      "https://quizsync4246.vercel.app/api/room/create-room",
+      `${BASE_URL}/api/room/create-room`,
       {
         roomId,
         roomData,
@@ -27,7 +27,7 @@ export async function createRoomData(roomId: string, roomData: RoomType) {
 export async function joinRoom(roomId: string, user: string) {
   try {
     const response = await axios.post(
-      "https://quizsync4246.vercel.app/api/room/join-room",
+      `${BASE_URL}/api/room/join-room`,
       {
         roomId,
         user,
@@ -39,16 +39,16 @@ export async function joinRoom(roomId: string, user: string) {
     // Forward credit-related errors properly
     if (axios.isAxiosError(error)) {
       const errorData = error.response?.data;
-      
+
       // Check for credit error specifically
       if (errorData?.error === "Insufficient credits") {
         throw new Error("Insufficient credits: You need at least 1 credit to join a room");
       }
-      
+
       // Pass through other error details
       throw new Error(errorData?.details || errorData?.error || error.message);
     }
-    
+
     // For non-axios errors, re-throw as is
     throw error;
   }
@@ -57,7 +57,7 @@ export async function joinRoom(roomId: string, user: string) {
 export async function storeQuizResults(roomId: string, results: any) {
   try {
     console.log(`Storing quiz results for room ${roomId}`);
-    
+
     // Map results to the format expected by the API
     const formattedResults = {
       results: {
@@ -74,9 +74,9 @@ export async function storeQuizResults(roomId: string, results: any) {
         })) || []
       }
     };
-    
+
     const response = await axios.post(
-      `https://quizsync4246.vercel.app/api/room/${roomId}/results`,
+      `${BASE_URL}/api/room/${roomId}/results`,
       formattedResults,
       {
         headers: {
@@ -84,7 +84,7 @@ export async function storeQuizResults(roomId: string, results: any) {
         }
       }
     );
-    
+
     console.log(`Quiz results stored successfully for room ${roomId}`);
     return response.data;
   } catch (error) {

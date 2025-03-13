@@ -14,7 +14,7 @@ pnpm dev
 bun dev
 ```
 
-Open [https://quizsync4246.vercel.app](https://quizsync4246.vercel.app) with your browser to see the result.
+Open [${BASE_URL}](${BASE_URL}) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

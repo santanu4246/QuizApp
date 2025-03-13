@@ -45,7 +45,10 @@ import {
 import axios from "axios";
 import { GameHistoryCard } from "../components/GameHistoryCard";
 import InsufficientCreditsDialog from "../components/ui/InsufficientCreditsDialog";
-const socket = io("https://quizapp-l30d.onrender.com")
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+// console.log(BASE_URL);
+
+const socket = io(BASE_URL || "");
 
 // Define interfaces for game history
 interface GameHistoryItem {
@@ -85,7 +88,7 @@ export default function DashboardPage() {
     questionCount?: number;
     difficulty?: string;
   }
-  
+
   const [inputedData, setInputedData] = useState<InputData>({});
   const [roomCode, setRoomCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +96,8 @@ export default function DashboardPage() {
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [showInsufficientCreditsDialog, setShowInsufficientCreditsDialog] = useState(false);
+  const [showInsufficientCreditsDialog, setShowInsufficientCreditsDialog] =
+    useState(false);
   const [userCredits, setUserCredits] = useState<number>(0);
 
   const handleChange = (
@@ -127,17 +131,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchGameHistory = async () => {
       if (!session?.user?.id) return;
-      
+
       setIsLoadingHistory(true);
       try {
         // Fetch user stats - add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const statsResponse = await axios.get(`/api/user/${session.user.id}/stats?t=${timestamp}`);
-        
+        const statsResponse = await axios.get(
+          `/api/user/${session.user.id}/stats?t=${timestamp}`
+        );
+
         if (statsResponse.data) {
-          console.log("User stats received:", statsResponse.data);
+          // console.log("User stats received:", statsResponse.data);
           setUserStats(statsResponse.data);
-          
+
           // Set user credits if available in the stats
           if (statsResponse.data.credits !== undefined) {
             setUserCredits(statsResponse.data.credits);
@@ -151,14 +157,18 @@ export default function DashboardPage() {
             losses: 0,
             draws: 0,
             winRate: 0,
-            totalPoints: 0
+            totalPoints: 0,
           });
         }
-        
+
         // Fetch game history - add timestamp to prevent caching
-        const historyResponse = await axios.get(`/api/user/${session.user.id}/game-history?t=${timestamp}`);
+        const historyResponse = await axios.get(
+          `/api/user/${session.user.id}/game-history?t=${timestamp}`
+        );
         if (historyResponse.data && Array.isArray(historyResponse.data.games)) {
-          console.log(`Received ${historyResponse.data.games.length} game history records`);
+          console.log(
+            `Received ${historyResponse.data.games.length} game history records`
+          );
           setGameHistory(historyResponse.data.games);
         } else {
           console.warn("No game history data received from API");
@@ -173,15 +183,15 @@ export default function DashboardPage() {
           losses: 0,
           draws: 0,
           winRate: 0,
-          totalPoints: 0
+          totalPoints: 0,
         });
-        
+
         setGameHistory([]);
       } finally {
         setIsLoadingHistory(false);
       }
     };
-    
+
     fetchGameHistory();
   }, [session?.user?.id]);
 
@@ -189,11 +199,11 @@ export default function DashboardPage() {
     socket.on("roomError", (error) => {
       setIsLoading(false);
       setIsJoining(false);
-      
+
       // Check if it's a credit-related error
-      if (typeof error === 'object' && error.error === "Insufficient credits") {
+      if (typeof error === "object" && error.error === "Insufficient credits") {
         setShowInsufficientCreditsDialog(true);
-      } else if (typeof error === 'string' && error.includes("credit")) {
+      } else if (typeof error === "string" && error.includes("credit")) {
         setShowInsufficientCreditsDialog(true);
       } else {
         // Handle other errors
@@ -244,10 +254,11 @@ export default function DashboardPage() {
     const date = new Date(dateString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
+
     if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)}h ago`;
     return `${Math.floor(diffInSeconds / 86400)}d ago`;
   };
 
@@ -258,7 +269,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-main ">
@@ -445,8 +455,8 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium text-zinc-400">Win Rate</p>
                 <p className="text-2xl font-bold text-zinc-100">
-                  {userStats && userStats.gamesPlayed > 0 
-                    ? `${Math.round((userStats.winRate || 0) * 100)}%` 
+                  {userStats && userStats.gamesPlayed > 0
+                    ? `${Math.round((userStats.winRate || 0) * 100)}%`
                     : "0%"}
                 </p>
               </div>
@@ -459,7 +469,9 @@ export default function DashboardPage() {
                 <Gamepad2 className="h-6 w-6 text-green-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">Games Played</p>
+                <p className="text-sm font-medium text-zinc-400">
+                  Games Played
+                </p>
                 <p className="text-2xl font-bold text-zinc-100">
                   {userStats?.gamesPlayed || 0}
                 </p>
@@ -473,7 +485,9 @@ export default function DashboardPage() {
                 <Clock className="h-6 w-6 text-purple-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">Total Points</p>
+                <p className="text-sm font-medium text-zinc-400">
+                  Total Points
+                </p>
                 <p className="text-2xl font-bold text-zinc-100">
                   {userStats?.totalPoints || 0}
                 </p>
@@ -487,9 +501,13 @@ export default function DashboardPage() {
                 <Users2 className="h-6 w-6 text-amber-500" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">W/L/D Record</p>
+                <p className="text-sm font-medium text-zinc-400">
+                  W/L/D Record
+                </p>
                 <p className="text-2xl font-bold text-zinc-100">
-                  {userStats ? `${userStats.wins}/${userStats.losses}/${userStats.draws}` : "0/0/0"}
+                  {userStats
+                    ? `${userStats.wins}/${userStats.losses}/${userStats.draws}`
+                    : "0/0/0"}
                 </p>
               </div>
             </div>
@@ -537,7 +555,9 @@ export default function DashboardPage() {
                 </div>
               ) : gameHistory.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-zinc-400">No game history yet. Play a game to see your results!</p>
+                  <p className="text-zinc-400">
+                    No game history yet. Play a game to see your results!
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -556,11 +576,13 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {gameHistory
-                    .filter(game => game.result === 'win')
-                    .map((game) => (
-                      console.log(game),
-                      <GameHistoryCard key={game.id} game={game} />
-                    ))}
+                    .filter((game) => game.result === "win")
+                    .map(
+                      (game) => (
+                        console.log(game),
+                        (<GameHistoryCard key={game.id} game={game} />)
+                      )
+                    )}
                 </div>
               )}
             </TabsContent>
@@ -573,7 +595,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {gameHistory
-                    .filter(game => game.result === 'loss')
+                    .filter((game) => game.result === "loss")
                     .map((game) => (
                       <GameHistoryCard key={game.id} game={game} />
                     ))}
@@ -584,9 +606,9 @@ export default function DashboardPage() {
         </Card>
       </div>
       {/* Insufficient Credits Dialog */}
-      <InsufficientCreditsDialog 
-        open={showInsufficientCreditsDialog} 
-        onClose={() => setShowInsufficientCreditsDialog(false)} 
+      <InsufficientCreditsDialog
+        open={showInsufficientCreditsDialog}
+        onClose={() => setShowInsufficientCreditsDialog(false)}
       />
     </div>
   );
