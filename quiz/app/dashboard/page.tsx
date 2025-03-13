@@ -324,6 +324,8 @@ export default function DashboardPage() {
                       <SelectItem value="history">History</SelectItem>
                       <SelectItem value="Javascript">Javascript</SelectItem>
                       <SelectItem value="Typescript">Typescript</SelectItem>
+                       <SelectItem value="React">React</SelectItem>
+                      <SelectItem value="Riddle">Riddle</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
