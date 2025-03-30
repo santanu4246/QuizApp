@@ -59,6 +59,8 @@ QuizSync is a cutting-edge, real-time quiz application that revolutionizes the w
 | TypeScript | 5.7.3 | Type Safety |
 | Socket.IO | 4.8.1 | Real-time Server |
 | Google Generative AI | 0.24.0 | AI Integration |
+| Prisma | 6.3.0 | Database ORM |
+| Neon DB | Latest | Serverless PostgreSQL Database |
 | Node.js | Latest | Runtime Environment |
 
 </div>
@@ -69,7 +71,7 @@ Before you begin, ensure you have the following installed:
 
 - 💻 Node.js (v18 or higher)
 - 📦 npm or yarn
-- 🗄️ MongoDB (for database)
+- 🗄️ Neon DB Account (for database)
 - 🔑 Google AI API key (for quiz generation)
 
 ## 🚀 Getting Started
@@ -105,7 +107,7 @@ NEXTAUTH_SECRET=your-secret-key
 **Backend (.env):**
 ```env
 PORT=5000
-MONGODB_URI=your-mongodb-uri
+DATABASE_URL="postgres://[user]:[password]@[neon-hostname]/[dbname]?sslmode=require"
 GOOGLE_AI_API_KEY=your-google-ai-api-key
 ```
 
@@ -114,12 +116,15 @@ GOOGLE_AI_API_KEY=your-google-ai-api-key
 **Frontend:**
 ```bash
 cd quiz
+npm install
+npx prisma generate
 npm run dev
 ```
 
 **Backend:**
 ```bash
 cd backend
+npm install
 npm run dev
 ```
 
