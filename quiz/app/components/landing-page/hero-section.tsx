@@ -61,13 +61,13 @@ export default function Component() {
               Challenge Your Friends
             </span>
           </AnimatedShinyText>
-          <Button
+          {/* <Button
             variant="ghost"
             className="h-6 items-center gap-1 rounded-full px-2 py-0 text-sm text-gray-400 hover:bg-gray-900 hover:text-gray-300"
           >
             How to Play
             <ArrowRight className="h-3 w-3" />
-          </Button>
+          </Button> */}
         </motion.div>
 
         <motion.div variants={itemVariants}>
@@ -93,18 +93,18 @@ export default function Component() {
           <Link href={"/login"}>
             <Button
               size="lg"
-              className="h-12 rounded-lg bg-[#00E599] px-8 text-base hover:bg-[#00E5BF]"
+              className="h-12 rounded-lg bg-[#00E599] px-8 text-md text-white font-semibold hover:bg-[#00E5BF]"
             >
               Create Battle Room
             </Button>
           </Link>
-          <Button
+          {/* <Button
             variant="outline"
             size="lg"
             className="h-12 rounded-lg border-gray-800 bg-transparent px-8 text-white"
           >
             Join Battle
-          </Button>
+          </Button> */}
         </motion.div>
       </motion.div>
     </section>
