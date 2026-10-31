@@ -1,9 +1,7 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
-import { useRef } from "react";
 import { Inter } from "next/font/google";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 
 import { Button } from "../ui/button";
 import Link from "next/link";
@@ -13,9 +11,7 @@ import AnimatedShinyText from "../ui/animated-shiny-text";
 const inter = Inter({ subsets: ["latin"] });
 
 export default function Component() {
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -25,7 +21,7 @@ export default function Component() {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 25 },
     visible: {
       opacity: 1,
@@ -42,7 +38,6 @@ export default function Component() {
       className={`relative w-full flex justify-center ${inter.className}`}
     >
       <motion.div
-        ref={contentRef}
         className="container flex h-[60vh] md:min-h-[75vh] max-w-6xl flex-col items-center pt-24 px-4  text-center"
         variants={containerVariants}
         initial="hidden"
